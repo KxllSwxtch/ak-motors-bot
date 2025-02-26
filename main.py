@@ -539,7 +539,10 @@ def calculate_cost(link, message):
             f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
             f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
-            "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у менеджера @BAZARISH_KPP\n\n"
+            "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
+            f"▪️ +82 10-2934-8855 (Артур)\n"
+            f"▪️ +82 10-5528-0997 (Тимур)\n"
+            f"▪️ +82 10-5128-8082 (Александр) \n\n"
             "🔗 <a href='https://t.me/akmotors96'>Официальный телеграм канал</a>\n"
         )
 
@@ -547,6 +550,11 @@ def calculate_cost(link, message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton("Детали расчёта", callback_data="detail")
+        )
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Технический Отчёт об Автомобиле", callback_data="technical_card"
+            )
         )
         keyboard.add(
             types.InlineKeyboardButton(
@@ -645,6 +653,138 @@ def get_insurance_total():
         return ["", ""]
 
 
+def get_technical_card():
+    global vehicle_id
+
+    url = f"https://api.encar.com/v1/readside/inspection/vehicle/{vehicle_id}"
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Referer": "http://www.encar.com/",
+            "Cache-Control": "max-age=0",
+            "Connection": "keep-alive",
+        }
+
+        response = requests.get(url, headers)
+        json_response = response.json()
+
+        # Основная информация
+        model_year = (
+            json_response.get("master", {}).get("detail", {}).get("modelYear", "")
+        )
+        first_registration_date = (
+            json_response.get("master", {})
+            .get("detail", {})
+            .get("firstRegistrationDate", "")
+        )
+        comments = (
+            json_response.get("master", {})
+            .get("detail", {})
+            .get("comments", "")
+            .strip()
+        )
+        usage_change_types = (
+            json_response.get("master", {})
+            .get("detail", {})
+            .get("usageChangeTypes", [])
+        )
+        paint_part_types = (
+            json_response.get("master", {}).get("detail", {}).get("paintPartTypes", [])
+        )
+        serious_types = (
+            json_response.get("master", {}).get("detail", {}).get("seriousTypes", [])
+        )
+        tuning_state_types = (
+            json_response.get("master", {})
+            .get("detail", {})
+            .get("tuningStateTypes", [])
+        )
+        etcs = json_response.get("etcs", [])
+
+        # Перевод использования
+        usage_translation = {
+            "렌트": "Аренда",
+            "리스": "Лизинг",
+            "영업용": "Коммерческое использование",
+        }
+        usage_change = "Не указано"
+        if usage_change_types:
+            usage_change = usage_translation.get(
+                usage_change_types[0].get("title", ""), "Не указано"
+            )
+
+        # Перевод комментариев
+        if not comments:
+            comments = "Нет данных"
+        else:
+            comments = comments.replace(
+                "조 앞/뒤 도어 판금도색", "Передняя/задняя дверь: Рихтовка и покраска"
+            )
+
+        # Необходимость ремонта
+        repair_needed = []
+        for etc in etcs:
+            title = etc["type"]["title"]
+            if title == "수리필요":
+                for child in etc["children"]:
+                    repair_needed.append(child["type"]["title"])
+
+        repair_translation = {
+            "외장": "Кузов",
+            "내장": "Интерьер",
+            "광택": "Полировка",
+            "룸 클리링": "Чистка салона",
+            "휠": "Колёса",
+            "타이어": "Шины",
+            "유리": "Стекло",
+        }
+        repair_needed_translated = [
+            repair_translation.get(item, item) for item in repair_needed
+        ]
+        repair_output = (
+            "Нет данных"
+            if not repair_needed_translated
+            else "\n".join(
+                [f"- {item}: Требуется ремонт" for item in repair_needed_translated]
+            )
+        )
+
+        # Окрашенные элементы
+        painted_parts = (
+            "Нет данных" if not paint_part_types else "\n".join(paint_part_types)
+        )
+
+        # Серьёзные повреждения
+        serious_damages = (
+            "Нет данных" if not serious_types else "\n".join(serious_types)
+        )
+
+        # Тюнинг и модификации
+        tuning_mods = (
+            "Нет данных" if not tuning_state_types else "\n".join(tuning_state_types)
+        )
+
+        # Сборка сообщения
+        output = (
+            f"🚗 <b>Технический отчёт об автомобиле</b> 🚗\n\n"
+            # f"📅 <b>Дата первой регистрации</b>: {first_registration_date}\n"
+            f"🛠 <b>Обновление тех. состояния</b>: {model_year}\n\n"
+            f"🔧 <b>Использование автомобиля</b>: {usage_change}\n\n"
+            # f"📋 <b>Комментарии</b>:\n{comments}\n\n"
+            f"⚙️ <b>Необходимость ремонта</b>:\n{repair_output}\n\n"
+            f"🎨 <b>Окрашенные элементы</b>:\n{painted_parts}\n\n"
+            f"🚧 <b>Серьёзные повреждения</b>:\n{serious_damages}\n\n"
+            f"🔧 <b>Тюнинг и модификации</b>:\n{tuning_mods}"
+        )
+
+        return output
+
+    except Exception as e:
+        print(f"Произошла ошибка при получении данных: {e}")
+        return "Произошла ошибка при получении данных"
+
+
 # Callback query handler
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback_query(call):
@@ -697,15 +837,45 @@ def handle_callback_query(call):
                 )
             )
 
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
-            )
-        )
+        # keyboard.add(
+        #     types.InlineKeyboardButton(
+        #         "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+        #     )
+        # )
 
         bot.send_message(
             call.message.chat.id,
             detail_message,
+            parse_mode="HTML",
+            reply_markup=keyboard,
+        )
+
+    elif call.data == "technical_card":
+        print_message("[ЗАПРОС] ТЕХНИЧЕСКАЯ ОТЧËТ ОБ АВТОМОБИЛЕ")
+
+        technical_card_output = get_technical_card()
+
+        bot.send_message(
+            call.message.chat.id,
+            "Запрашиваю отчёт по автомобилю. Пожалуйста подождите ⏳",
+        )
+
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Рассчитать стоимость другого автомобиля",
+                callback_data="calculate_another",
+            )
+        )
+        # keyboard.add(
+        #     types.InlineKeyboardButton(
+        #         "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+        #     )
+        # )
+
+        bot.send_message(
+            call.message.chat.id,
+            technical_card_output,
             parse_mode="HTML",
             reply_markup=keyboard,
         )
