@@ -46,6 +46,10 @@ vehicle_id = None
 vehicle_no = None
 
 
+usd_to_krw_rate = 0
+usd_to_rub_rate = 0
+
+
 def print_message(message):
     print("\n\n##############")
     print(f"{message}")
@@ -80,6 +84,25 @@ def get_rub_to_krw_rate():
         return None
 
 
+def get_currency_rates():
+    global usd_rate, usd_to_krw_rate, usd_to_rub_rate
+
+    print_message("ПОЛУЧАЕМ КУРСЫ ВАЛЮТ")
+
+    # Получаем курс USD → KRW
+    get_usd_to_krw_rate()
+
+    # Получаем курс USD → RUB
+    get_usd_to_rub_rate()
+
+    rates_text = (
+        f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
+        f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
+    )
+
+    return rates_text
+
+
 # Пример вызова
 rate = get_rub_to_krw_rate()
 if rate:
@@ -89,33 +112,47 @@ else:
 
 
 # Функция для получения курсов валют с API
-def get_currency_rates():
-    global usd_rate, krw_rub_rate
+def get_usd_to_krw_rate():
+    global usd_to_krw_rate
 
-    print_message("ПОЛУЧАЕМ КУРС ЦБ")
+    url = "https://api.manana.kr/exchange/rate/KRW/USD.json"
 
-    url = "https://www.cbr-xml-daily.ru/daily_json.js"
-    response = requests.get(url)
-    data = response.json()
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Проверяем успешность запроса
+        data = response.json()
 
-    eur = data["Valute"]["EUR"]["Value"] + (data["Valute"]["EUR"]["Value"])
-    usd = data["Valute"]["USD"]["Value"] + (data["Valute"]["USD"]["Value"])
-    krw = (data["Valute"]["KRW"]["Value"] + (data["Valute"]["KRW"]["Value"])) / data[
-        "Valute"
-    ]["KRW"]["Nominal"]
-    cny = data["Valute"]["CNY"]["Value"] + (data["Valute"]["CNY"]["Value"])
+        # Получаем курс и добавляем +25 KRW
+        usd_to_krw = data[0]["rate"] + 25
+        usd_to_krw_rate = usd_to_krw
 
-    usd_rate = usd
-    krw_rub_rate = krw
+        print(f"Курс USD → KRW (с учетом +25 KRW): {usd_to_krw_rate}")
+    except requests.RequestException as e:
+        print(f"Ошибка при получении курса USD → KRW: {e}")
+        usd_to_krw_rate = None
 
-    rates_text = (
-        f"EUR: <b>{eur:.2f} ₽</b>\n"
-        f"USD: <b>{usd:.2f} ₽</b>\n"
-        f"KRW: <b>{krw:.2f} ₽</b>\n"
-        f"CNY: <b>{cny:.2f} ₽</b>"
-    )
 
-    return rates_text
+def get_usd_to_rub_rate():
+    global usd_to_rub_rate
+
+    url = "https://mosca.moscow/api/v1/rate/"
+    headers = {
+        "Access-Token": "JI_piVMlX9TsvIRKmduIbZOWzLo-v2zXozNfuxxXj4_MpsUKd_7aQS16fExzA7MVFCVVoAAmrb_-aMuu_UIbJA"
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Проверяем успешность запроса
+        data = response.json()
+
+        # Получаем курс USD → RUB
+        usd_to_rub = data["buy"]
+        usd_to_rub_rate = usd_to_rub
+
+        print(f"Курс USD → RUB: {usd_to_rub_rate}")
+    except requests.RequestException as e:
+        print(f"Ошибка при получении курса USD → RUB: {e}")
+        usd_to_rub_rate = None
 
 
 # Обработчик команды /cbr
@@ -363,6 +400,8 @@ def calculate_cost(link, message):
 
         # Конвертируем стоимость авто в рубли
         price_krw = int(car_price) * 10000
+        price_usd = price_krw / usd_to_krw_rate
+        price_rub = price_usd * usd_to_rub_rate
 
         response = get_customs_fees(
             car_engine_displacement,
@@ -380,165 +419,189 @@ def calculate_cost(link, message):
         # Расчет итоговой стоимости автомобиля в рублях
         total_cost = (
             50000
-            + (price_krw * krw_rub_rate)
-            + (440000 * krw_rub_rate)
-            + (100000 * krw_rub_rate)
-            + (350000 * krw_rub_rate)
-            + (600 * usd_rate)
+            + (price_rub)
+            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + (600 * usd_to_rub_rate)
             + customs_duty
             + customs_fee
             + recycling_fee
-            + (346 * usd_rate)
+            + (346 * usd_to_rub_rate)
             + 50000
             + 30000
             + 8000
         )
 
         total_cost_krw = (
-            (50000 / krw_rub_rate)
+            ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
             + (price_krw)
             + 440000
             + 100000
             + 350000
-            + ((600 * usd_rate) / krw_rub_rate)
-            + (customs_duty / krw_rub_rate)
-            + (customs_fee / krw_rub_rate)
-            + (recycling_fee / krw_rub_rate)
-            + ((346 * usd_rate) / krw_rub_rate)
-            + 50000 / krw_rub_rate
-            + 30000 / krw_rub_rate
-            + 8000 / krw_rub_rate
+            + ((600 * usd_to_krw_rate))
+            + ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
+            + (346 * usd_to_krw_rate)
+            + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((30000 / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
         )
-        total_cost_usd = total_cost / usd_rate
+
+        total_cost_usd = (
+            (50000 / usd_to_rub_rate)
+            + (price_usd)
+            + (440000 / usd_to_krw_rate)
+            + (100000 / usd_to_krw_rate)
+            + (350000 / usd_to_krw_rate)
+            + (600)
+            + (customs_duty / usd_to_rub_rate)
+            + (customs_fee / usd_to_rub_rate)
+            + (recycling_fee / usd_to_rub_rate)
+            + (346)
+            + (50000 / usd_to_rub_rate)
+            + (30000 / usd_to_rub_rate)
+            + (8000 / usd_to_rub_rate)
+        )
 
         car_data["total_cost_usd"] = total_cost_usd
         car_data["total_cost_krw"] = total_cost_krw
         car_data["total_cost_rub"] = total_cost
 
         car_data["agent_korea_rub"] = 50000
-        car_data["agent_korea_usd"] = 50000 / usd_rate
-        car_data["agent_korea_krw"] = 50000 / krw_rub_rate
+        car_data["agent_korea_usd"] = 50000 / usd_to_rub_rate
+        car_data["agent_korea_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
 
-        car_data["advance_rub"] = 1000000 * krw_rub_rate
-        car_data["advance_usd"] = (1000000 * krw_rub_rate) / usd_rate
+        car_data["advance_rub"] = (1000000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["advance_usd"] = 1000000 * usd_to_krw_rate
         car_data["advance_krw"] = 1000000
 
         car_data["car_price_krw"] = price_krw
-        car_data["car_price_usd"] = (price_krw) * krw_rub_rate / usd_rate
-        car_data["car_price_rub"] = (price_krw) * krw_rub_rate
+        car_data["car_price_usd"] = price_usd
+        car_data["car_price_rub"] = price_rub
 
-        car_data["dealer_korea_usd"] = 440000 * krw_rub_rate / usd_rate
+        car_data["dealer_korea_usd"] = 440000 / usd_to_krw_rate
         car_data["dealer_korea_krw"] = 440000
-        car_data["dealer_korea_rub"] = 440000 * krw_rub_rate
+        car_data["dealer_korea_rub"] = (440000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["delivery_korea_usd"] = 100000 * krw_rub_rate / usd_rate
+        car_data["delivery_korea_usd"] = 100000 / usd_to_krw_rate
         car_data["delivery_korea_krw"] = 100000
-        car_data["delivery_korea_rub"] = 100000 * krw_rub_rate
+        car_data["delivery_korea_rub"] = (100000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["transfer_korea_usd"] = 350000 * krw_rub_rate / usd_rate
+        car_data["transfer_korea_usd"] = 350000 / usd_to_krw_rate
         car_data["transfer_korea_krw"] = 350000
-        car_data["transfer_korea_rub"] = 350000 * krw_rub_rate
+        car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
         car_data["freight_korea_usd"] = 600
-        car_data["freight_korea_krw"] = 600 * usd_rate / krw_rub_rate
-        car_data["freight_korea_rub"] = 600 * usd_rate
+        car_data["freight_korea_krw"] = 600 * usd_to_krw_rate
+        car_data["freight_korea_rub"] = 600 * usd_to_rub_rate
 
         car_data["korea_total_usd"] = (
-            (50000 / usd_rate)
-            + (440000 * krw_rub_rate / usd_rate)
-            + (100000 * krw_rub_rate / usd_rate)
-            + (350000 * krw_rub_rate / usd_rate)
+            (50000 / usd_to_rub_rate)
+            + (440000 / usd_to_krw_rate)
+            + (100000 / usd_to_krw_rate)
+            + (350000 / usd_to_krw_rate)
             + (600)
         )
 
         car_data["korea_total_krw"] = (
-            (50000 / krw_rub_rate)
+            ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
             + (440000)
             + (100000)
             + 350000
-            + (600 * usd_rate / krw_rub_rate)
+            + (600 * usd_to_krw_rate)
         )
 
         car_data["korea_total_rub"] = (
             (50000)
-            + (440000 * krw_rub_rate)
-            + (100000 * krw_rub_rate)
-            + (350000 * krw_rub_rate)
-            + (600 * usd_rate)
+            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + (600 * usd_to_rub_rate)
         )
 
         car_data["korea_total_plus_car_usd"] = (
-            (50000 / usd_rate)
-            + ((price_krw) * krw_rub_rate / usd_rate)
-            + (440000 * krw_rub_rate / usd_rate)
-            + (100000 * krw_rub_rate / usd_rate)
-            + (350000 * krw_rub_rate / usd_rate)
+            (50000 / usd_to_rub_rate)
+            + (price_usd)
+            + (440000 / usd_to_krw_rate)
+            + (100000 / usd_to_krw_rate)
+            + (350000 / usd_to_krw_rate)
             + (600)
         )
         car_data["korea_total_plus_car_krw"] = (
-            (50000 / krw_rub_rate)
+            ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
             + (price_krw)
             + (440000)
             + (100000)
             + 350000
-            + (600 * usd_rate / krw_rub_rate)
+            + (600 * usd_to_krw_rate)
         )
         car_data["korea_total_plus_car_rub"] = (
             (50000)
-            + (price_krw * krw_rub_rate)
-            + (440000 * krw_rub_rate)
-            + (100000 * krw_rub_rate)
-            + (350000 * krw_rub_rate)
-            + (600 * usd_rate)
+            + (price_rub)
+            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + (600 * usd_to_rub_rate)
         )
 
         # Расходы Россия
-        car_data["customs_duty_usd"] = customs_duty / usd_rate
-        car_data["customs_duty_krw"] = customs_duty * rub_to_krw_rate
+        car_data["customs_duty_usd"] = customs_duty / usd_to_rub_rate
+        car_data["customs_duty_krw"] = (
+            customs_duty / usd_to_rub_rate
+        ) * usd_to_krw_rate
         car_data["customs_duty_rub"] = customs_duty
 
-        car_data["customs_fee_usd"] = customs_fee / usd_rate
-        car_data["customs_fee_krw"] = customs_fee / krw_rub_rate
+        car_data["customs_fee_usd"] = customs_fee / usd_to_rub_rate
+        car_data["customs_fee_krw"] = (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
         car_data["customs_fee_rub"] = customs_fee
 
-        car_data["util_fee_usd"] = recycling_fee / usd_rate
-        car_data["util_fee_krw"] = recycling_fee / krw_rub_rate
+        car_data["util_fee_usd"] = recycling_fee / usd_to_rub_rate
+        car_data["util_fee_krw"] = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
         car_data["util_fee_rub"] = recycling_fee
 
         car_data["broker_russia_usd"] = 346
-        car_data["broker_russia_krw"] = 346 * usd_rate / krw_rub_rate
-        car_data["broker_russia_rub"] = 346 * usd_rate
+        car_data["broker_russia_krw"] = 346 * usd_to_krw_rate
+        car_data["broker_russia_rub"] = 346 * usd_to_rub_rate
 
-        car_data["svh_russia_usd"] = 50000 / usd_rate
-        car_data["svh_russia_krw"] = 50000 / krw_rub_rate
+        car_data["svh_russia_usd"] = 50000 / usd_to_rub_rate
+        car_data["svh_russia_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
         car_data["svh_russia_rub"] = 50000
 
-        car_data["lab_russia_usd"] = 30000 / usd_rate
-        car_data["lab_russia_krw"] = 30000 / krw_rub_rate
+        car_data["lab_russia_usd"] = 30000 / usd_to_rub_rate
+        car_data["lab_russia_krw"] = (30000 / usd_to_rub_rate) * usd_to_krw_rate
         car_data["lab_russia_rub"] = 30000
 
-        car_data["perm_registration_russia_usd"] = 8000 / usd_rate
-        car_data["perm_registration_russia_krw"] = 8000 / krw_rub_rate
+        car_data["perm_registration_russia_usd"] = 8000 / usd_to_rub_rate
+        car_data["perm_registration_russia_krw"] = (
+            8000 / usd_to_rub_rate
+        ) * usd_to_krw_rate
         car_data["perm_registration_russia_rub"] = 8000
 
         car_data["russia_total_usd"] = (
-            (customs_duty / usd_rate)
-            + (customs_fee / usd_rate)
-            + (recycling_fee / usd_rate)
+            (customs_duty / usd_to_rub_rate)
+            + (customs_fee / usd_to_rub_rate)
+            + (recycling_fee / usd_to_rub_rate)
             + (346)
-            + (50000 / usd_rate)
-            + (8000 / usd_rate)
+            + (50000 / usd_to_rub_rate)
+            + (8000 / usd_to_rub_rate)
         )
         car_data["russia_total_krw"] = (
-            (customs_duty / krw_rub_rate)
-            + (customs_fee / krw_rub_rate)
-            + (recycling_fee / krw_rub_rate)
-            + (346 * usd_rate / krw_rub_rate)
-            + (50000 / krw_rub_rate)
-            + (8000 / krw_rub_rate)
+            ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
+            + (346 * usd_to_krw_rate)
+            + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+            + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
         )
         car_data["russia_total_rub"] = (
-            customs_duty + customs_fee + recycling_fee + (346 * usd_rate) + 50000 + 8000
+            customs_duty
+            + customs_fee
+            + recycling_fee
+            + (346 * usd_to_rub_rate)
+            + 50000
+            + 8000
         )
 
         preview_link = f"https://fem.encar.com/cars/detail/{car_id}"
@@ -830,7 +893,10 @@ def handle_callback_query(call):
             f"Временная регистрация-Владивосток:\n<b>${format_number(car_data['perm_registration_russia_usd'])}</b> | <b>₩{format_number(car_data['perm_registration_russia_krw'])}</b> | <b>{format_number(car_data['perm_registration_russia_rub'])} ₽</b>\n\n"
             f"Итого расходов по России: \n<b>${format_number(car_data['russia_total_usd'])}</b> | <b>₩{format_number(car_data['russia_total_krw'])}</b> | <b>{format_number(car_data['russia_total_rub'])} ₽</b>\n\n\n"
             f"Итого под ключ во Владивостоке: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
-            f"<b>Доставку до вашего города уточняйте у менеджера @@timyo97</b>\n"
+            f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
+            f"▪️ +82 10-2934-8855 (Артур)\n"
+            f"▪️ +82 10-5528-0997 (Тимур)\n"
+            f"▪️ +82 10-5128-8082 (Александр)\n\n"
         )
 
         # Inline buttons for further actions
