@@ -146,15 +146,18 @@ def cbr_command(message):
 # Main menu creation function
 def main_menu():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-    keyboard.add(types.KeyboardButton(CALCULATE_CAR_TEXT))
+    keyboard.add(
+        types.KeyboardButton(CALCULATE_CAR_TEXT),
+        types.KeyboardButton("Заказ запчастей"),
+    )
     keyboard.add(
         types.KeyboardButton("Написать менеджеру"),
         types.KeyboardButton("О нас"),
         types.KeyboardButton("Telegram-канал"),
-        types.KeyboardButton("Написать в WhatsApp"),
+        # types.KeyboardButton("Написать в WhatsApp"),
         types.KeyboardButton("Instagram"),
-        types.KeyboardButton("Tik-Tok"),
-        types.KeyboardButton("Facebook"),
+        # types.KeyboardButton("Tik-Tok"),
+        # types.KeyboardButton("Facebook"),
     )
     return keyboard
 
@@ -167,9 +170,20 @@ def send_welcome(message):
     user_first_name = message.from_user.first_name
     welcome_message = (
         f"Здравствуйте, {user_first_name}!\n\n"
-        "Я бот компании Bazarish Auto. Я помогу вам рассчитать стоимость понравившегося вам автомобиля из Южной Кореи до Владивостока.\n\n"
+        "Я бот компании AK Motors. Я помогу вам рассчитать стоимость понравившегося вам автомобиля из Южной Кореи до стран СНГ.\n\n"
         "Выберите действие из меню ниже."
     )
+
+    # Логотип компании
+    logo_url = "https://res.cloudinary.com/pomegranitedesign/image/upload/v1740623897/AK%20Motors/akmotorslogo.jpg"
+
+    # Отправляем логотип перед сообщением
+    bot.send_photo(
+        message.chat.id,
+        photo=logo_url,
+    )
+
+    # Отправляем приветственное сообщение
     bot.send_message(message.chat.id, welcome_message, reply_markup=main_menu())
 
 
@@ -313,7 +327,7 @@ def calculate_cost(link, message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me@BAZARISH_KPP"
+                "Написать менеджеру", url="https://t.me/@timyo97"
             )
         )
         keyboard.add(
@@ -564,7 +578,7 @@ def calculate_cost(link, message):
         )
         keyboard.add(
             types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me/BAZARISH_KPP"
+                "Написать менеджеру", url="https://t.me/@timyo97"
             )
         )
         keyboard.add(
@@ -816,7 +830,7 @@ def handle_callback_query(call):
             f"Временная регистрация-Владивосток:\n<b>${format_number(car_data['perm_registration_russia_usd'])}</b> | <b>₩{format_number(car_data['perm_registration_russia_krw'])}</b> | <b>{format_number(car_data['perm_registration_russia_rub'])} ₽</b>\n\n"
             f"Итого расходов по России: \n<b>${format_number(car_data['russia_total_usd'])}</b> | <b>₩{format_number(car_data['russia_total_krw'])}</b> | <b>{format_number(car_data['russia_total_rub'])} ₽</b>\n\n\n"
             f"Итого под ключ во Владивостоке: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
-            f"<b>Доставку до вашего города уточняйте у менеджера @BAZARISH_KPP</b>\n"
+            f"<b>Доставку до вашего города уточняйте у менеджера @@timyo97</b>\n"
         )
 
         # Inline buttons for further actions
@@ -839,7 +853,7 @@ def handle_callback_query(call):
 
         # keyboard.add(
         #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+        #         "Связаться с менеджером", url="https://t.me/@timyo97"
         #     )
         # )
 
@@ -869,7 +883,7 @@ def handle_callback_query(call):
         )
         # keyboard.add(
         #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+        #         "Связаться с менеджером", url="https://t.me/@timyo97"
         #     )
         # )
 
@@ -913,7 +927,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+                    "Связаться с менеджером", url="https://t.me/@timyo97"
                 )
             )
 
@@ -949,7 +963,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/BAZARISH_KPP"
+                    "Связаться с менеджером", url="https://t.me/@timyo97"
                 )
             )
 
@@ -978,15 +992,32 @@ def handle_message(message):
             "Пожалуйста, введите ссылку на автомобиль с сайта www.encar.com:",
         )
 
+    elif user_message == "Заказ запчастей":
+        bot.send_message(
+            message.chat.id,
+            "Для оформления заявки на заказ запчастей пожалуйста напишите нашему менеджеру\n@KHAN_ALEX2022",
+        )
+
     # Проверка на корректность ссылки
     elif re.match(r"^https?://(www|fem)\.encar\.com/.*", user_message):
         calculate_cost(user_message, message)
 
     # Проверка на другие команды
     elif user_message == "Написать менеджеру":
-        bot.send_message(
-            message.chat.id, "Вы можете связаться с менеджером по ссылке: @BAZARISH_KPP"
-        )
+        managers_list = [
+            {"name": "Ким Артур (Корея)", "whatsapp": "https://wa.me/821029348855"},
+            {"name": "Ким Артур (Россия)", "whatsapp": "https://wa.me/79999000070"},
+            {"name": "Тимур", "whatsapp": "https://wa.me/821055280997"},
+            {"name": "Александр", "whatsapp": "https://wa.me/821051288082"},
+        ]
+
+        # Формируем сообщение со списком менеджеров
+        message_text = "Вы можете связаться с одним из наших менеджеров:\n\n"
+        for manager in managers_list:
+            message_text += f"[{manager['name']}]({manager['whatsapp']})\n"
+
+        # Отправляем сообщение с использованием Markdown
+        bot.send_message(message.chat.id, message_text, parse_mode="Markdown")
 
     elif user_message == "Написать в WhatsApp":
         contacts = [
