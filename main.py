@@ -45,9 +45,10 @@ car_year = None
 vehicle_id = None
 vehicle_no = None
 
-
 usd_to_krw_rate = 0
 usd_to_rub_rate = 0
+
+usdt_to_krw_rate = 0
 
 
 def print_message(message):
@@ -64,6 +65,23 @@ def set_bot_commands():
         types.BotCommand("cbr", "Курсы валют"),
     ]
     bot.set_my_commands(commands)
+
+
+def get_usdt_to_krw_rate():
+    global usdt_to_krw_rate
+
+    # URL для получения курса USDT к KRW
+    url = "https://api.coinbase.com/v2/exchange-rates?currency=USDT"
+    response = requests.get(url)
+    data = response.json()
+
+    # Извлечение курса KRW
+    krw_rate = data["data"]["rates"]["KRW"]
+    usdt_to_krw_rate = float(krw_rate) + 4
+
+    print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
+
+    return float(krw_rate) + 4
 
 
 def get_rub_to_krw_rate():
@@ -101,14 +119,6 @@ def get_currency_rates():
     )
 
     return rates_text
-
-
-# Пример вызова
-rate = get_rub_to_krw_rate()
-if rate:
-    print(f"Текущий курс RUB → KRW: {rate:.2f} ₩")
-else:
-    print("Не удалось получить курс.")
 
 
 # Функция для получения курсов валют с API
@@ -320,7 +330,7 @@ def get_car_info(url):
 
 # Function to calculate the total cost
 def calculate_cost(link, message):
-    global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate
+    global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
 
     print_message("ЗАПРОС НА РАСЧЁТ АВТОМОБИЛЯ")
 
@@ -615,6 +625,7 @@ def calculate_cost(link, message):
             f"КПП: {formatted_transmission}\n\n"
             f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
             f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
+            f"💵 <b>Курс USDT к Корейской Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
@@ -1140,4 +1151,6 @@ if __name__ == "__main__":
     set_bot_commands()
     get_rub_to_krw_rate()
     get_currency_rates()
+    get_usdt_to_krw_rate()
+
     bot.polling(non_stop=True)
