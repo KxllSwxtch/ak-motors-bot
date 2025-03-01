@@ -759,19 +759,18 @@ def get_technical_card():
 
         # Основная информация
         model_year = (
-            json_response.get("master", {}).get("detail", {}).get("modelYear", "")
+            json_response.get("master", {})
+            .get("detail", {})
+            .get("modelYear", "Не указано")
         )
         first_registration_date = (
             json_response.get("master", {})
             .get("detail", {})
-            .get("firstRegistrationDate", "")
+            .get("firstRegistrationDate", "Не указано")
         )
-        comments = (
-            json_response.get("master", {})
-            .get("detail", {})
-            .get("comments", "")
-            .strip()
-        )
+        comments = json_response.get("master", {}).get("detail", {}).get("comments")
+        comments = comments.strip() if comments else "Нет данных"
+
         usage_change_types = (
             json_response.get("master", {})
             .get("detail", {})
@@ -800,14 +799,6 @@ def get_technical_card():
         if usage_change_types:
             usage_change = usage_translation.get(
                 usage_change_types[0].get("title", ""), "Не указано"
-            )
-
-        # Перевод комментариев
-        if not comments:
-            comments = "Нет данных"
-        else:
-            comments = comments.replace(
-                "조 앞/뒤 도어 판금도색", "Передняя/задняя дверь: Рихтовка и покраска"
             )
 
         # Необходимость ремонта
@@ -856,10 +847,8 @@ def get_technical_card():
         # Сборка сообщения
         output = (
             f"🚗 <b>Технический отчёт об автомобиле</b> 🚗\n\n"
-            # f"📅 <b>Дата первой регистрации</b>: {first_registration_date}\n"
             f"🛠 <b>Обновление тех. состояния</b>: {model_year}\n\n"
             f"🔧 <b>Использование автомобиля</b>: {usage_change}\n\n"
-            # f"📋 <b>Комментарии</b>:\n{comments}\n\n"
             f"⚙️ <b>Необходимость ремонта</b>:\n{repair_output}\n\n"
             f"🎨 <b>Окрашенные элементы</b>:\n{painted_parts}\n\n"
             f"🚧 <b>Серьёзные повреждения</b>:\n{serious_damages}\n\n"
