@@ -16,6 +16,7 @@ from utils import (
     get_customs_fees,
     calculate_age,
     format_number,
+    get_customs_fees_manual,
 )
 
 CALCULATE_CAR_TEXT = "Рассчитать Автомобиль по ссылке с Encar"
@@ -38,6 +39,7 @@ krw_rub_rate = 0
 rub_to_krw_rate = 0
 usd_rate = 0
 users = set()
+user_data = {}
 
 car_month = None
 car_year = None
@@ -195,6 +197,7 @@ def main_menu():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     keyboard.add(
         types.KeyboardButton(CALCULATE_CAR_TEXT),
+        types.KeyboardButton("Ручной расчёт"),
         types.KeyboardButton("Заказ запчастей"),
     )
     keyboard.add(
@@ -479,6 +482,10 @@ def calculate_cost(link, message):
         car_data["total_cost_krw"] = total_cost_krw
         car_data["total_cost_rub"] = total_cost
 
+        car_data["company_fees_usd"] = 1400000 / usd_to_krw_rate
+        car_data["company_fees_krw"] = 1400000
+        car_data["company_fees_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+
         car_data["agent_korea_rub"] = 50000
         car_data["agent_korea_usd"] = 50000 / usd_to_rub_rate
         car_data["agent_korea_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
@@ -503,9 +510,9 @@ def calculate_cost(link, message):
         car_data["transfer_korea_krw"] = 350000
         car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["freight_korea_usd"] = 600
-        car_data["freight_korea_krw"] = 600 * usd_to_krw_rate
-        car_data["freight_korea_rub"] = 600 * usd_to_rub_rate
+        car_data["freight_korea_usd"] = 1400000 / usd_to_krw_rate
+        car_data["freight_korea_krw"] = 1400000
+        car_data["freight_korea_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
 
         car_data["korea_total_usd"] = (
             (50000 / usd_to_rub_rate)
@@ -571,9 +578,21 @@ def calculate_cost(link, message):
         car_data["util_fee_krw"] = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
         car_data["util_fee_rub"] = recycling_fee
 
-        car_data["broker_russia_usd"] = 346
-        car_data["broker_russia_krw"] = 346 * usd_to_krw_rate
-        car_data["broker_russia_rub"] = 346 * usd_to_rub_rate
+        car_data["broker_russia_usd"] = 120000 / usd_to_rub_rate
+        car_data["broker_russia_krw"] = (120000 / usd_to_rub_rate) * usd_to_krw_rate
+        car_data["broker_russia_rub"] = 120000
+
+        car_data["moscow_transporter_usd"] = 230000 / usd_to_rub_rate
+        car_data["moscow_transporter_krw"] = (
+            230000 / usd_to_rub_rate
+        ) * usd_to_krw_rate
+        car_data["moscow_transporter_rub"] = 230000
+
+        car_data["vladivostok_transfer_usd"] = 13000 / usd_to_rub_rate
+        car_data["vladivostok_transfer_krw"] = (
+            13000 / usd_to_rub_rate
+        ) * usdt_to_krw_rate
+        car_data["vladivostok_transfer_rub"] = 13000
 
         car_data["svh_russia_usd"] = 50000 / usd_to_rub_rate
         car_data["svh_russia_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
@@ -871,28 +890,29 @@ def handle_callback_query(call):
         print_message("[ЗАПРОС] ДЕТАЛИЗАЦИЯ РАСЧËТА")
 
         detail_message = (
-            f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ</i>:\n\n"
-            f"Агентские услуги по договору:\n<b>${format_number(car_data['agent_korea_usd'])}</b> | <b>₩{format_number(car_data['agent_korea_krw'])}</b> | <b>50000 ₽</b>\n\n"
-            f"Задаток (бронь авто):\n<b>${format_number(car_data['advance_usd'])}</b> | <b>₩1,000,000</b> | <b>{format_number(car_data['advance_rub'])} ₽</b>\n\n\n"
-            f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ</i>:\n\n"
-            # f"Стоимость автомобиля (за вычетом задатка):\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
+            f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
+            f"Стоимость автомобиля:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
+            f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(car_data['company_fees_usd'])}</b> | <b>₩{format_number(car_data['company_fees_krw'])}</b> | <b>{format_number(car_data['company_fees_rub'])} ₽</b>\n\n"
+            f"Фрахт (отправка в порт, доставка автомобиля на базу, оплата судна):\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
             f"Диллерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
-            f"Доставка, снятие с учёта, оформление:\n<b>${format_number(car_data['delivery_korea_usd'])}</b> | <b>₩{format_number(car_data['delivery_korea_krw'])}</b> | <b>{format_number(car_data['delivery_korea_rub'])} ₽</b>\n\n"
-            f"Транспортировка авто в порт:\n<b>${format_number(car_data['transfer_korea_usd'])}</b> | <b>₩{format_number(car_data['transfer_korea_krw'])}</b> | <b>{format_number(car_data['transfer_korea_rub'])} ₽</b>\n\n"
-            f"Фрахт (Паром до Владивостока):\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
-            f"<b>Итого расходов по Корее</b>:\n<b>${format_number(car_data['korea_total_usd'])}</b> | <b>₩{format_number(car_data['korea_total_krw'])}</b> | <b>{format_number(car_data['korea_total_rub'])} ₽</b>\n\n"
-            f"<b>Стоимость автомобиля</b>:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
-            f"<b>Итого</b>:\n<b>${format_number(car_data['korea_total_plus_car_usd'])}</b> | <b>₩{format_number(car_data['korea_total_plus_car_krw'])}</b> | <b>{format_number(car_data['korea_total_plus_car_rub'])} ₽</b>\n\n\n"
-            f"<i>РАСХОДЫ РОССИЯ</i>:\n\n\n"
+            # f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ</i>:\n\n"
+            # f"Доставка, снятие с учёта, оформление:\n<b>${format_number(car_data['delivery_korea_usd'])}</b> | <b>₩{format_number(car_data['delivery_korea_krw'])}</b> | <b>{format_number(car_data['delivery_korea_rub'])} ₽</b>\n\n"
+            # f"Транспортировка авто в порт:\n<b>${format_number(car_data['transfer_korea_usd'])}</b> | <b>₩{format_number(car_data['transfer_korea_krw'])}</b> | <b>{format_number(car_data['transfer_korea_rub'])} ₽</b>\n\n"
+            # f"<b>Итого расходов по Корее</b>:\n<b>${format_number(car_data['korea_total_usd'])}</b> | <b>₩{format_number(car_data['korea_total_krw'])}</b> | <b>{format_number(car_data['korea_total_rub'])} ₽</b>\n\n"
+            # f"<b>Стоимость автомобиля</b>:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
+            # f"<b>Итого</b>:\n<b>${format_number(car_data['korea_total_plus_car_usd'])}</b> | <b>₩{format_number(car_data['korea_total_plus_car_krw'])}</b> | <b>{format_number(car_data['korea_total_plus_car_rub'])} ₽</b>\n\n\n"
+            f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
+            f"Брокер-Владивосток:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n\n"
             f"Единая таможенная ставка:\n<b>${format_number(car_data['customs_duty_usd'])}</b> | <b>₩{format_number(car_data['customs_duty_krw'])}</b> | <b>{format_number(car_data['customs_duty_rub'])} ₽</b>\n\n"
             f"Таможенное оформление:\n<b>${format_number(car_data['customs_fee_usd'])}</b> | <b>₩{format_number(car_data['customs_fee_krw'])}</b> | <b>{format_number(car_data['customs_fee_rub'])} ₽</b>\n\n"
             f"Утилизационный сбор:\n<b>${format_number(car_data['util_fee_usd'])}</b> | <b>₩{format_number(car_data['util_fee_krw'])}</b> | <b>{format_number(car_data['util_fee_rub'])} ₽</b>\n\n\n"
-            f"Брокер-Владивосток:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n"
-            f"СВХ-Владивосток:\n<b>${format_number(car_data['svh_russia_usd'])}</b> | <b>₩{format_number(car_data['svh_russia_krw'])}</b> | <b>{format_number(car_data['svh_russia_rub'])} ₽</b>\n\n"
-            f"Лаборатория, СБКТС, ЭПТС:\n<b>${format_number(car_data['lab_russia_usd'])}</b> | <b>₩{format_number(car_data['lab_russia_krw'])}</b> | <b>{format_number(car_data['lab_russia_rub'])} ₽</b>\n\n"
-            f"Временная регистрация-Владивосток:\n<b>${format_number(car_data['perm_registration_russia_usd'])}</b> | <b>₩{format_number(car_data['perm_registration_russia_krw'])}</b> | <b>{format_number(car_data['perm_registration_russia_rub'])} ₽</b>\n\n"
-            f"Итого расходов по России: \n<b>${format_number(car_data['russia_total_usd'])}</b> | <b>₩{format_number(car_data['russia_total_krw'])}</b> | <b>{format_number(car_data['russia_total_rub'])} ₽</b>\n\n\n"
-            f"Итого под ключ во Владивостоке: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
+            f"Перегон во Владивостоке:\n<b>${format_number(car_data['vladivostok_transfer_usd'])}</b> | <b>₩{format_number(car_data['vladivostok_transfer_krw'])}</b> | <b>{format_number(car_data['vladivostok_transfer_rub'])} ₽</b>\n\n"
+            f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
+            # f"СВХ-Владивосток:\n<b>${format_number(car_data['svh_russia_usd'])}</b> | <b>₩{format_number(car_data['svh_russia_krw'])}</b> | <b>{format_number(car_data['svh_russia_rub'])} ₽</b>\n\n"
+            # f"Лаборатория, СБКТС, ЭПТС:\n<b>${format_number(car_data['lab_russia_usd'])}</b> | <b>₩{format_number(car_data['lab_russia_krw'])}</b> | <b>{format_number(car_data['lab_russia_rub'])} ₽</b>\n\n"
+            # f"Временная регистрация-Владивосток:\n<b>${format_number(car_data['perm_registration_russia_usd'])}</b> | <b>₩{format_number(car_data['perm_registration_russia_krw'])}</b> | <b>{format_number(car_data['perm_registration_russia_rub'])} ₽</b>\n\n"
+            # f"Итого расходов по России: \n<b>${format_number(car_data['russia_total_usd'])}</b> | <b>₩{format_number(car_data['russia_total_krw'])}</b> | <b>{format_number(car_data['russia_total_rub'])} ₽</b>\n\n\n"
+            f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
             f"▪️ +82 10-5528-0997 (Тимур)\n"
@@ -1046,6 +1066,202 @@ def handle_callback_query(call):
             "Пожалуйста, введите ссылку на автомобиль с сайта www.encar.com:",
         )
 
+    elif call.data == "calculate_another_manual":
+        bot.send_message(
+            call.message.chat.id,
+            "Выберите возраст автомобиля:",
+            reply_markup=age_selection_keyboard(),
+        )
+
+
+def age_selection_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton("До 3 лет", callback_data="manual_age_0-3"),
+        types.InlineKeyboardButton("3-5 лет", callback_data="manual_age_3-5"),
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("5-7 лет", callback_data="manual_age_5-7"),
+        types.InlineKeyboardButton("Более 7 лет", callback_data="manual_age_7-0"),
+    )
+    return keyboard
+
+
+def process_car_age(message):
+    user_input = message.text.strip()
+
+    # Проверяем ввод
+    age_mapping = {
+        "До 3 лет": "0-3",
+        "От 3 до 5 лет": "3-5",
+        "От 5 до 7 лет": "5-7",
+        "Более 7 лет": "7-0",
+    }
+
+    if user_input not in age_mapping:
+        bot.send_message(message.chat.id, "Пожалуйста, выберите возраст из списка.")
+        return
+
+    # Сохраняем возраст авто
+    user_data[message.chat.id] = {"car_age": age_mapping[user_input]}
+
+    # Запрашиваем объем двигателя
+    bot.send_message(
+        message.chat.id,
+        "Введите объем двигателя в см³ (например, 1998):",
+    )
+    bot.register_next_step_handler(message, process_engine_volume)
+
+
+def process_engine_volume(message):
+    user_input = message.text.strip()
+
+    # Проверяем, что введено число
+    if not user_input.isdigit():
+        bot.send_message(
+            message.chat.id, "Пожалуйста, введите корректный объем двигателя в см³."
+        )
+        bot.register_next_step_handler(message, process_engine_volume)
+        return
+
+    # Сохраняем объем двигателя
+    user_data[message.chat.id]["engine_volume"] = int(user_input)
+
+    # Запрашиваем стоимость авто
+    bot.send_message(
+        message.chat.id,
+        "Введите стоимость автомобиля в корейских вонах (например, 15000000):",
+    )
+    bot.register_next_step_handler(message, process_car_price)
+
+
+def process_car_price(message):
+    user_input = message.text.strip()
+
+    # Проверяем, что введено число
+    if not user_input.isdigit():
+        bot.send_message(
+            message.chat.id,
+            "Пожалуйста, введите корректную стоимость автомобиля в вонах.",
+        )
+        bot.register_next_step_handler(message, process_car_price)
+        return
+
+    # Сохраняем стоимость автомобиля
+    user_data[message.chat.id]["car_price_krw"] = int(user_input)
+
+    # Извлекаем данные пользователя
+    if message.chat.id not in user_data:
+        user_data[message.chat.id] = {}
+
+    if "car_age" not in user_data[message.chat.id]:
+        bot.send_message(message.chat.id, "Произошла ошибка, попробуйте снова.")
+        return  # Прерываем выполнение, если возраст не установлен
+
+    age_group = user_data[message.chat.id]["car_age"]
+    engine_volume = user_data[message.chat.id]["engine_volume"]
+    car_price_krw = user_data[message.chat.id]["car_price_krw"]
+
+    # Конвертируем стоимость автомобиля в USD и RUB
+    price_usd = car_price_krw / usd_to_krw_rate
+    price_rub = price_usd * usd_to_rub_rate
+
+    # Рассчитываем таможенные платежи
+    customs_fees = get_customs_fees_manual(engine_volume, car_price_krw, age_group)
+
+    customs_duty = clean_number(customs_fees["tax"])  # Таможенная пошлина
+    customs_fee = clean_number(customs_fees["sbor"])  # Таможенный сбор
+    recycling_fee = clean_number(customs_fees["util"])  # Утилизационный сбор
+
+    # Расчет итоговой стоимости автомобиля в рублях
+    total_cost_rub = (
+        50000
+        + price_rub
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)  # Дилерский сбор
+        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)  # Доставка по Корее
+        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)  # Транспортировка в порт
+        + (600 * usd_to_rub_rate)  # Фрахт
+        + customs_duty
+        + customs_fee
+        + recycling_fee
+        + (346 * usd_to_rub_rate)  # Брокерские услуги
+        + 50000  # СВХ
+        + 30000  # Лаборатория, СБКТС
+        + 8000  # Временная регистрация
+    )
+
+    total_cost_krw = (
+        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + car_price_krw
+        + 440000
+        + 100000
+        + 350000
+        + ((600 * usd_to_krw_rate))
+        + ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + (346 * usd_to_krw_rate)
+        + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((30000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
+    )
+
+    total_cost_usd = (
+        (50000 / usd_to_rub_rate)
+        + price_usd
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_krw_rate)
+        + (350000 / usd_to_krw_rate)
+        + (600)
+        + (customs_duty / usd_to_rub_rate)
+        + (customs_fee / usd_to_rub_rate)
+        + (recycling_fee / usd_to_rub_rate)
+        + (346)
+        + (50000 / usd_to_rub_rate)
+        + (30000 / usd_to_rub_rate)
+        + (8000 / usd_to_rub_rate)
+    )
+
+    # Формируем сообщение с расчетом стоимости
+    result_message = (
+        f"💰 <b>Расчёт стоимости автомобиля</b> 💰\n\n"
+        f"📌 Возраст автомобиля: <b>{age_group} лет</b>\n"
+        f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n"
+        f"💲 Стоимость в Корее: <b>₩{format_number(car_price_krw)}</b>\n\n"
+        f"🛂 Таможенные платежи:\n"
+        f"🔹 Таможенная пошлина: <b>{format_number(customs_duty)} ₽</b>\n"
+        f"🔹 Таможенный сбор: <b>{format_number(customs_fee)} ₽</b>\n"
+        f"🔹 Утилизационный сбор: <b>{format_number(recycling_fee)} ₽</b>\n\n"
+        f"🏁 <b>Итоговая стоимость автомобиля под ключ</b>:\n"
+        f"🔹 В долларах: <b>${format_number(total_cost_usd)}</b>\n"
+        f"🔹 В вонах: <b>₩{format_number(total_cost_krw)}</b>\n"
+        f"🔹 В рублях: <b>{format_number(total_cost_rub)} ₽</b>\n"
+    )
+
+    # Клавиатура с дальнейшими действиями
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "Рассчитать другой автомобиль", callback_data="calculate_another_manual"
+        )
+    )
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "Связаться с менеджером", url="https://t.me/@timyo97"
+        )
+    )
+
+    # Отправляем сообщение пользователю
+    bot.send_message(
+        message.chat.id,
+        result_message,
+        parse_mode="HTML",
+        reply_markup=keyboard,
+    )
+
+    # Очищаем данные пользователя после расчета
+    del user_data[message.chat.id]
+
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -1057,6 +1273,21 @@ def handle_message(message):
             message.chat.id,
             "Пожалуйста, введите ссылку на автомобиль с сайта www.encar.com:",
         )
+
+    elif user_message == "Ручной расчёт":
+        # Запрашиваем возраст автомобиля
+        keyboard = types.ReplyKeyboardMarkup(
+            resize_keyboard=True, one_time_keyboard=True
+        )
+        keyboard.add("До 3 лет", "От 3 до 5 лет")
+        keyboard.add("От 5 до 7 лет", "Более 7 лет")
+
+        bot.send_message(
+            message.chat.id,
+            "Выберите возраст автомобиля:",
+            reply_markup=keyboard,
+        )
+        bot.register_next_step_handler(message, process_car_age)
 
     elif user_message == "Заказ запчастей":
         bot.send_message(
