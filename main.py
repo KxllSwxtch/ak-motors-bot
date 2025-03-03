@@ -431,51 +431,42 @@ def calculate_cost(link, message):
 
         # Расчет итоговой стоимости автомобиля в рублях
         total_cost = (
-            50000
-            + (price_rub)
+            price_rub
+            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + (600 * usd_to_rub_rate)
-            + customs_duty
+            + 120000
             + customs_fee
+            + customs_duty
             + recycling_fee
-            + (346 * usd_to_rub_rate)
-            + 50000
-            + 30000
-            + 8000
+            + 13000
+            + 230000
         )
 
         total_cost_krw = (
-            ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
-            + (price_krw)
+            price_krw
+            + 1400000
+            + 1400000
             + 440000
-            + 100000
-            + 350000
-            + ((600 * usd_to_krw_rate))
-            + ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
-            + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
-            + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
-            + (346 * usd_to_krw_rate)
-            + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
-            + ((30000 / usd_to_rub_rate) * usd_to_krw_rate)
-            + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
+            + (120000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+            + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+            + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+            + (13000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (230000 / usd_to_rub_rate) * usd_to_krw_rate
         )
 
         total_cost_usd = (
-            (50000 / usd_to_rub_rate)
-            + (price_usd)
+            price_usd
+            + (1400000 / usd_to_krw_rate)
+            + (1400000 / usd_to_krw_rate)
             + (440000 / usd_to_krw_rate)
-            + (100000 / usd_to_krw_rate)
-            + (350000 / usd_to_krw_rate)
-            + (600)
-            + (customs_duty / usd_to_rub_rate)
+            + (120000 / usd_to_rub_rate)
             + (customs_fee / usd_to_rub_rate)
+            + (customs_duty / usd_to_rub_rate)
             + (recycling_fee / usd_to_rub_rate)
-            + (346)
-            + (50000 / usd_to_rub_rate)
-            + (30000 / usd_to_rub_rate)
-            + (8000 / usd_to_rub_rate)
+            + (13000 / usd_to_rub_rate)
+            + (230000 / usd_to_rub_rate)
         )
 
         car_data["total_cost_usd"] = total_cost_usd
@@ -678,6 +669,12 @@ def calculate_cost(link, message):
             types.InlineKeyboardButton(
                 "Расчёт другого автомобиля",
                 callback_data="calculate_another",
+            )
+        )
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "Главное меню",
+                callback_data="main_menu",
             )
         )
 
@@ -895,12 +892,6 @@ def handle_callback_query(call):
             f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(car_data['company_fees_usd'])}</b> | <b>₩{format_number(car_data['company_fees_krw'])}</b> | <b>{format_number(car_data['company_fees_rub'])} ₽</b>\n\n"
             f"Фрахт (отправка в порт, доставка автомобиля на базу, оплата судна):\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
             f"Диллерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
-            # f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ</i>:\n\n"
-            # f"Доставка, снятие с учёта, оформление:\n<b>${format_number(car_data['delivery_korea_usd'])}</b> | <b>₩{format_number(car_data['delivery_korea_krw'])}</b> | <b>{format_number(car_data['delivery_korea_rub'])} ₽</b>\n\n"
-            # f"Транспортировка авто в порт:\n<b>${format_number(car_data['transfer_korea_usd'])}</b> | <b>₩{format_number(car_data['transfer_korea_krw'])}</b> | <b>{format_number(car_data['transfer_korea_rub'])} ₽</b>\n\n"
-            # f"<b>Итого расходов по Корее</b>:\n<b>${format_number(car_data['korea_total_usd'])}</b> | <b>₩{format_number(car_data['korea_total_krw'])}</b> | <b>{format_number(car_data['korea_total_rub'])} ₽</b>\n\n"
-            # f"<b>Стоимость автомобиля</b>:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
-            # f"<b>Итого</b>:\n<b>${format_number(car_data['korea_total_plus_car_usd'])}</b> | <b>₩{format_number(car_data['korea_total_plus_car_krw'])}</b> | <b>{format_number(car_data['korea_total_plus_car_rub'])} ₽</b>\n\n\n"
             f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
             f"Брокер-Владивосток:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n\n"
             f"Единая таможенная ставка:\n<b>${format_number(car_data['customs_duty_usd'])}</b> | <b>₩{format_number(car_data['customs_duty_krw'])}</b> | <b>{format_number(car_data['customs_duty_rub'])} ₽</b>\n\n"
@@ -908,10 +899,6 @@ def handle_callback_query(call):
             f"Утилизационный сбор:\n<b>${format_number(car_data['util_fee_usd'])}</b> | <b>₩{format_number(car_data['util_fee_krw'])}</b> | <b>{format_number(car_data['util_fee_rub'])} ₽</b>\n\n\n"
             f"Перегон во Владивостоке:\n<b>${format_number(car_data['vladivostok_transfer_usd'])}</b> | <b>₩{format_number(car_data['vladivostok_transfer_krw'])}</b> | <b>{format_number(car_data['vladivostok_transfer_rub'])} ₽</b>\n\n"
             f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
-            # f"СВХ-Владивосток:\n<b>${format_number(car_data['svh_russia_usd'])}</b> | <b>₩{format_number(car_data['svh_russia_krw'])}</b> | <b>{format_number(car_data['svh_russia_rub'])} ₽</b>\n\n"
-            # f"Лаборатория, СБКТС, ЭПТС:\n<b>${format_number(car_data['lab_russia_usd'])}</b> | <b>₩{format_number(car_data['lab_russia_krw'])}</b> | <b>{format_number(car_data['lab_russia_rub'])} ₽</b>\n\n"
-            # f"Временная регистрация-Владивосток:\n<b>${format_number(car_data['perm_registration_russia_usd'])}</b> | <b>₩{format_number(car_data['perm_registration_russia_krw'])}</b> | <b>{format_number(car_data['perm_registration_russia_rub'])} ₽</b>\n\n"
-            # f"Итого расходов по России: \n<b>${format_number(car_data['russia_total_usd'])}</b> | <b>₩{format_number(car_data['russia_total_krw'])}</b> | <b>{format_number(car_data['russia_total_rub'])} ₽</b>\n\n\n"
             f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
@@ -937,11 +924,9 @@ def handle_callback_query(call):
                 )
             )
 
-        # keyboard.add(
-        #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/@timyo97"
-        #     )
-        # )
+        keyboard.add(
+            types.InlineKeyboardButton("Главное меню", callback_data="main_menu")
+        )
 
         bot.send_message(
             call.message.chat.id,
@@ -966,6 +951,9 @@ def handle_callback_query(call):
                 "Рассчитать стоимость другого автомобиля",
                 callback_data="calculate_another",
             )
+        )
+        keyboard.add(
+            types.InlineKeyboardButton("Главное меню", callback_data="main_menu")
         )
         # keyboard.add(
         #     types.InlineKeyboardButton(
@@ -1052,6 +1040,9 @@ def handle_callback_query(call):
                     "Связаться с менеджером", url="https://t.me/@timyo97"
                 )
             )
+            keyboard.add(
+                types.InlineKeyboardButton("Главное меню", callback_data="main_menu")
+            )
 
             bot.send_message(
                 call.message.chat.id,
@@ -1067,24 +1058,14 @@ def handle_callback_query(call):
         )
 
     elif call.data == "calculate_another_manual":
-        bot.send_message(
+        msg = bot.send_message(
             call.message.chat.id,
-            "Выберите возраст автомобиля:",
-            reply_markup=age_selection_keyboard(),
+            "Выберите возраст автомобиля",
         )
+        bot.register_next_step_handler(msg, process_car_age)
 
-
-def age_selection_keyboard():
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(
-        types.InlineKeyboardButton("До 3 лет", callback_data="manual_age_0-3"),
-        types.InlineKeyboardButton("3-5 лет", callback_data="manual_age_3-5"),
-    )
-    keyboard.add(
-        types.InlineKeyboardButton("5-7 лет", callback_data="manual_age_5-7"),
-        types.InlineKeyboardButton("Более 7 лет", callback_data="manual_age_7-0"),
-    )
-    return keyboard
+    elif call.data == "main_menu":
+        bot.send_message(call.message.chat.id, "Главное меню", reply_markup=main_menu())
 
 
 def process_car_age(message):
@@ -1136,6 +1117,8 @@ def process_engine_volume(message):
 
 
 def process_car_price(message):
+    global usd_to_krw_rate, usd_to_rub_rate
+
     user_input = message.text.strip()
 
     # Проверяем, что введено число
@@ -1175,67 +1158,102 @@ def process_car_price(message):
 
     # Расчет итоговой стоимости автомобиля в рублях
     total_cost_rub = (
-        50000
-        + price_rub
-        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)  # Дилерский сбор
-        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)  # Доставка по Корее
-        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)  # Транспортировка в порт
-        + (600 * usd_to_rub_rate)  # Фрахт
-        + customs_duty
+        price_rub
+        + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + 120000
         + customs_fee
+        + customs_duty
         + recycling_fee
-        + (346 * usd_to_rub_rate)  # Брокерские услуги
-        + 50000  # СВХ
-        + 30000  # Лаборатория, СБКТС
-        + 8000  # Временная регистрация
+        + 13000
+        + 230000
     )
 
     total_cost_krw = (
-        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
-        + car_price_krw
+        car_price_krw
+        + 1400000
+        + 1400000
         + 440000
-        + 100000
-        + 350000
-        + ((600 * usd_to_krw_rate))
-        + ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
-        + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
-        + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
-        + (346 * usd_to_krw_rate)
-        + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
-        + ((30000 / usd_to_rub_rate) * usd_to_krw_rate)
-        + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + (120000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+        + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+        + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+        + (13000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (230000 / usd_to_rub_rate) * usd_to_krw_rate
     )
 
     total_cost_usd = (
-        (50000 / usd_to_rub_rate)
-        + price_usd
+        price_usd
+        + (1400000 / usd_to_krw_rate)
+        + (1400000 / usd_to_krw_rate)
         + (440000 / usd_to_krw_rate)
-        + (100000 / usd_to_krw_rate)
-        + (350000 / usd_to_krw_rate)
-        + (600)
-        + (customs_duty / usd_to_rub_rate)
+        + (120000 / usd_to_rub_rate)
         + (customs_fee / usd_to_rub_rate)
+        + (customs_duty / usd_to_rub_rate)
         + (recycling_fee / usd_to_rub_rate)
-        + (346)
-        + (50000 / usd_to_rub_rate)
-        + (30000 / usd_to_rub_rate)
-        + (8000 / usd_to_rub_rate)
+        + (13000 / usd_to_rub_rate)
+        + (230000 / usd_to_rub_rate)
     )
+
+    company_fees_krw = 1400000
+    company_fees_usd = 1400000 / usdt_to_krw_rate
+    company_fees_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    freight_korea_krw = 1400000
+    freight_korea_usd = 1400000 / usd_to_krw_rate
+    freight_korea_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    dealer_korea_krw = 440000
+    dealer_korea_usd = 440000 / usd_to_krw_rate
+    dealer_korea_rub = (440000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    broker_russia_rub = 120000
+    broker_russia_usd = 120000 / usd_to_rub_rate
+    broker_russia_krw = (120000 / usd_to_rub_rate) * usd_to_krw_rate
+
+    customs_duty_rub = customs_duty
+    customs_duty_usd = customs_duty / usd_to_rub_rate
+    customs_duty_krw = (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+
+    customs_fee_rub = customs_fee
+    customs_fee_usd = customs_fee / usd_to_rub_rate
+    customs_fee_krw = (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+
+    util_fee_rub = recycling_fee
+    util_fee_usd = recycling_fee / usd_to_rub_rate
+    util_fee_krw = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+
+    vladivostok_transfer_rub = 13000
+    vladivostok_transfer_usd = 13000 / usd_to_rub_rate
+    vladivostok_transfer_krw = (13000 / usd_to_rub_rate) * usdt_to_krw_rate
+
+    moscow_transporter_rub = 230000
+    moscow_transporter_usd = 230000 / usd_to_rub_rate
+    moscow_transporter_krw = (230000 / usd_to_rub_rate) * usd_to_krw_rate
 
     # Формируем сообщение с расчетом стоимости
     result_message = (
         f"💰 <b>Расчёт стоимости автомобиля</b> 💰\n\n"
         f"📌 Возраст автомобиля: <b>{age_group} лет</b>\n"
-        f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n"
-        f"💲 Стоимость в Корее: <b>₩{format_number(car_price_krw)}</b>\n\n"
-        f"🛂 Таможенные платежи:\n"
-        f"🔹 Таможенная пошлина: <b>{format_number(customs_duty)} ₽</b>\n"
-        f"🔹 Таможенный сбор: <b>{format_number(customs_fee)} ₽</b>\n"
-        f"🔹 Утилизационный сбор: <b>{format_number(recycling_fee)} ₽</b>\n\n"
-        f"🏁 <b>Итоговая стоимость автомобиля под ключ</b>:\n"
-        f"🔹 В долларах: <b>${format_number(total_cost_usd)}</b>\n"
-        f"🔹 В вонах: <b>₩{format_number(total_cost_krw)}</b>\n"
-        f"🔹 В рублях: <b>{format_number(total_cost_rub)} ₽</b>\n"
+        f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n\n"
+        f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
+        f"Стоимость автомобиля:\n<b>${format_number(price_usd)}</b> | <b>₩{format_number(car_price_krw)}</b> | <b>{format_number(price_rub)} ₽</b>\n\n"
+        f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(company_fees_usd)}</b> | <b>₩{format_number(company_fees_krw)}</b> | <b>{format_number(company_fees_rub)} ₽</b>\n\n"
+        f"Фрахт (отправка в порт, доставка автомобиля на базу, оплата судна):\n<b>${format_number(freight_korea_usd)}</b> | <b>₩{format_number(freight_korea_krw)}</b> | <b>{format_number(freight_korea_rub)} ₽</b>\n\n\n"
+        f"Диллерский сбор:\n<b>${format_number(dealer_korea_usd)}</b> | <b>₩{format_number(dealer_korea_krw)}</b> | <b>{format_number(dealer_korea_rub)} ₽</b>\n\n"
+        f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
+        f"Брокер-Владивосток:\n<b>${format_number(broker_russia_usd)}</b> | <b>₩{format_number(broker_russia_krw)}</b> | <b>{format_number(broker_russia_rub)} ₽</b>\n\n\n"
+        f"Единая таможенная ставка:\n<b>${format_number(customs_duty_usd)}</b> | <b>₩{format_number(customs_duty_krw)}</b> | <b>{format_number(customs_duty_rub)} ₽</b>\n\n"
+        f"Утилизационный сбор:\n<b>${format_number(util_fee_usd)}</b> | <b>₩{format_number(util_fee_krw)}</b> | <b>{format_number(util_fee_rub)} ₽</b>\n\n\n"
+        f"Таможенное оформление:\n<b>${format_number(customs_fee_usd)}</b> | <b>₩{format_number(customs_fee_krw)}</b> | <b>{format_number(customs_fee_rub)} ₽</b>\n\n"
+        f"Перегон во Владивостоке:\n<b>${format_number(vladivostok_transfer_usd)}</b> | <b>₩{format_number(vladivostok_transfer_krw)}</b> | <b>{format_number(vladivostok_transfer_rub)} ₽</b>\n\n"
+        f"Автовоз до Москвы:\n<b>${format_number(moscow_transporter_usd)}</b> | <b>₩{format_number(moscow_transporter_krw)}</b> | <b>{format_number(moscow_transporter_rub)} ₽</b>\n\n"
+        f"Итого под ключ: \n<b>${format_number(total_cost_usd)}</b> | <b>₩{format_number(total_cost_krw)}</b> | <b>{format_number(total_cost_rub)} ₽</b>\n\n"
+        f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
+        f"▪️ +82 10-2934-8855 (Артур)\n"
+        f"▪️ +82 10-5528-0997 (Тимур)\n"
+        f"▪️ +82 10-5128-8082 (Александр)\n\n"
     )
 
     # Клавиатура с дальнейшими действиями
@@ -1250,6 +1268,7 @@ def process_car_price(message):
             "Связаться с менеджером", url="https://t.me/@timyo97"
         )
     )
+    keyboard.add(types.InlineKeyboardButton("Главное меню", callback_data="main_menu"))
 
     # Отправляем сообщение пользователю
     bot.send_message(
