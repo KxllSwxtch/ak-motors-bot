@@ -1,3 +1,4 @@
+import json
 import telebot
 import os
 import re
@@ -6,6 +7,7 @@ import locale
 import logging
 import urllib.parse
 
+from bs4 import BeautifulSoup
 from io import BytesIO
 from telebot import types
 from dotenv import load_dotenv
@@ -19,7 +21,7 @@ from utils import (
     get_customs_fees_manual,
 )
 
-CALCULATE_CAR_TEXT = "Рассчитать Автомобиль по ссылке с Encar"
+CALCULATE_CAR_TEXT = "Рассчитать Автомобиль (Encar, KBChaCha, ChutCha)"
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
@@ -257,78 +259,150 @@ def send_error_message(message, error_text):
 def get_car_info(url):
     global car_id_external, vehicle_no, vehicle_id, car_year, car_month
 
-    # driver = create_driver()
+    if "fem.encar.com" in url:
+        car_id_match = re.findall(r"\d+", url)
+        car_id = car_id_match[0]
+        car_id_external = car_id
 
-    car_id_match = re.findall(r"\d+", url)
-    car_id = car_id_match[0]
-    car_id_external = car_id
+        url = f"https://api.encar.com/v1/readside/vehicle/{car_id}"
 
-    url = f"https://api.encar.com/v1/readside/vehicle/{car_id}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Referer": "http://www.encar.com/",
+            "Cache-Control": "max-age=0",
+            "Connection": "keep-alive",
+        }
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "Referer": "http://www.encar.com/",
-        "Cache-Control": "max-age=0",
-        "Connection": "keep-alive",
-    }
+        response = requests.get(url, headers=headers).json()
 
-    response = requests.get(url, headers=headers).json()
+        # Информация об автомобиле
+        car_make = response["category"]["manufacturerEnglishName"]  # Марка
+        car_model = response["category"]["modelGroupEnglishName"]  # Модель
+        car_trim = response["category"]["gradeDetailEnglishName"] or ""  # Комплектация
 
-    # Информация об автомобиле
-    car_make = response["category"]["manufacturerEnglishName"]  # Марка
-    car_model = response["category"]["modelGroupEnglishName"]  # Модель
-    car_trim = response["category"]["gradeDetailEnglishName"] or ""  # Комплектация
+        car_title = f"{car_make} {car_model} {car_trim}"  # Заголовок
 
-    car_title = f"{car_make} {car_model} {car_trim}"  # Заголовок
+        # Получаем все необходимые данные по автомобилю
+        car_price = str(response["advertisement"]["price"])
+        car_date = response["category"]["yearMonth"]
+        year = car_date[2:4]
+        month = car_date[4:]
+        car_year = year
+        car_month = month
 
-    # Получаем все необходимые данные по автомобилю
-    car_price = str(response["advertisement"]["price"])
-    car_date = response["category"]["yearMonth"]
-    year = car_date[2:4]
-    month = car_date[4:]
-    car_year = year
-    car_month = month
+        # Пробег (форматирование)
+        mileage = response["spec"]["mileage"]
+        formatted_mileage = f"{mileage:,} км"
 
-    # Пробег (форматирование)
-    mileage = response["spec"]["mileage"]
-    formatted_mileage = f"{mileage:,} км"
+        # Тип КПП
+        transmission = response["spec"]["transmissionName"]
+        formatted_transmission = "Автомат" if "오토" in transmission else "Механика"
 
-    # Тип КПП
-    transmission = response["spec"]["transmissionName"]
-    formatted_transmission = "Автомат" if "오토" in transmission else "Механика"
+        car_engine_displacement = str(response["spec"]["displacement"])
+        car_type = response["spec"]["bodyName"]
 
-    car_engine_displacement = str(response["spec"]["displacement"])
-    car_type = response["spec"]["bodyName"]
+        # Список фотографий (берем первые 10)
+        car_photos = [
+            generate_encar_photo_url(photo["path"]) for photo in response["photos"][:10]
+        ]
+        car_photos = [url for url in car_photos if url]
 
-    # Список фотографий (берем первые 10)
-    car_photos = [
-        generate_encar_photo_url(photo["path"]) for photo in response["photos"][:10]
-    ]
-    car_photos = [url for url in car_photos if url]
+        # Дополнительные данные
+        vehicle_no = response["vehicleNo"]
+        vehicle_id = response["vehicleId"]
 
-    # Дополнительные данные
-    vehicle_no = response["vehicleNo"]
-    vehicle_id = response["vehicleId"]
+        # Форматируем
+        formatted_car_date = f"01{month}{year}"
+        formatted_car_type = "crossover" if car_type == "SUV" else "sedan"
 
-    # Форматируем
-    formatted_car_date = f"01{month}{year}"
-    formatted_car_type = "crossover" if car_type == "SUV" else "sedan"
+        print_message(
+            f"ID: {car_id}\nType: {formatted_car_type}\nDate: {formatted_car_date}\nCar Engine Displacement: {car_engine_displacement}\nPrice: {car_price} KRW"
+        )
 
-    print_message(
-        f"ID: {car_id}\nType: {formatted_car_type}\nDate: {formatted_car_date}\nCar Engine Displacement: {car_engine_displacement}\nPrice: {car_price} KRW"
-    )
+        return [
+            car_price,
+            car_engine_displacement,
+            formatted_car_date,
+            car_title,
+            formatted_mileage,
+            formatted_transmission,
+            car_photos,
+            year,
+            month,
+        ]
+    elif "kbchachacha.com" in url:
+        url = f"https://www.kbchachacha.com/public/car/detail.kbc?carSeq={car_id_external}"
 
-    return [
-        car_price,
-        car_engine_displacement,
-        formatted_car_date,
-        car_title,
-        formatted_mileage,
-        formatted_transmission,
-        car_photos,
-        year,
-        month,
-    ]
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en,ru;q=0.9,en-CA;q=0.8,la;q=0.7,fr;q=0.6,ko;q=0.5",
+            "Connection": "keep-alive",
+        }
+
+        response = requests.get(url=url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Находим JSON в <script type="application/ld+json">
+        json_script = soup.find("script", {"type": "application/ld+json"})
+        if json_script:
+            json_data = json.loads(json_script.text.strip())
+
+            # Извлекаем данные
+            car_name = json_data.get("name", "Неизвестная модель")
+            car_images = json_data.get("image", [])[:10]  # Берем первые 10 фото
+            car_price = json_data.get("offers", {}).get("price", "Не указано")
+
+            # Находим таблицу с информацией
+            table = soup.find("table", {"class": "detail-info-table"})
+            if table:
+                rows = table.find_all("tr")
+
+                # Достаём данные
+                car_number = None
+                car_year = None
+                car_mileage = None
+                car_fuel = None
+                car_engine_displacement = None
+
+                for row in rows:
+                    headers = row.find_all("th")
+                    values = row.find_all("td")
+
+                    for th, td in zip(headers, values):
+                        header_text = th.text.strip()
+                        value_text = td.text.strip()
+
+                        if header_text == "차량정보":  # Номер машины
+                            car_number = value_text
+                        elif header_text == "연식":  # Год выпуска
+                            car_year = value_text
+                        elif header_text == "주행거리":  # Пробег
+                            car_mileage = value_text
+                        elif header_text == "연료":  # Топливо
+                            car_fuel = value_text
+                        elif header_text == "배기량":  # Объем двигателя
+                            car_engine_displacement = value_text
+            else:
+                print("❌ Таблица информации не найдена")
+
+            car_info = {
+                "name": car_name,
+                "car_price": car_price,
+                "images": car_images,
+                "number": car_number,
+                "year": car_year,
+                "mileage": car_mileage,
+                "fuel": car_fuel,
+                "engine_volume": car_engine_displacement,
+                "transmission": "오토",
+            }
+
+            return car_info
+        else:
+            print(
+                "❌ Не удалось найти JSON-данные в <script type='application/ld+json'>"
+            )
 
 
 # Function to calculate the total cost
@@ -343,8 +417,8 @@ def calculate_cost(link, message):
     )
 
     car_id = None
+    car_title = ""
 
-    # Проверка ссылки на мобильную версию
     if "fem.encar.com" in link:
         car_id_match = re.findall(r"\d+", link)
         if car_id_match:
@@ -354,24 +428,67 @@ def calculate_cost(link, message):
         else:
             send_error_message(message, "🚫 Не удалось извлечь carid из ссылки.")
             return
+
+    elif "kbchachacha.com" in link:
+        parsed_url = urlparse(link)
+        query_params = parse_qs(parsed_url.query)
+        car_id = query_params.get("carSeq", [None])[0]
+
+        if car_id:
+            car_id_external = car_id
+            link = f"https://www.kbchachacha.com/public/car/detail.kbc?carSeq={car_id}"
+        else:
+            send_error_message(message, "🚫 Не удалось извлечь carSeq из ссылки.")
+            return
+
     else:
         # Извлекаем carid с URL encar
         parsed_url = urlparse(link)
         query_params = parse_qs(parsed_url.query)
         car_id = query_params.get("carid", [None])[0]
 
-    result = get_car_info(link)
-    (
-        car_price,
-        car_engine_displacement,
-        formatted_car_date,
-        car_title,
-        formatted_mileage,
-        formatted_transmission,
-        car_photos,
-        year,
-        month,
-    ) = result
+    # Если ссылка с encar
+    if "fem.encar.com" in link:
+        result = get_car_info(link)
+        (
+            car_price,
+            car_engine_displacement,
+            formatted_car_date,
+            car_title,
+            formatted_mileage,
+            formatted_transmission,
+            car_photos,
+            year,
+            month,
+        ) = result
+
+    # Если ссылка с kbchacha
+    if "kbchachacha.com" in link:
+        result = get_car_info(link)
+
+        car_title = result["name"]
+
+        match = re.search(r"(\d{2})년(\d{2})월", result["year"])
+        if match:
+            car_year = match.group(1)
+            car_month = match.group(2)  # Получаем двухзначный месяц
+        else:
+            car_year = "Не найдено"
+            car_month = "Не найдено"
+
+        month = car_month
+        year = car_year
+
+        car_engine_displacement = re.sub(r"[^\d]", "", result["engine_volume"])
+        car_price = int(result["car_price"]) / 10000
+        formatted_car_date = f"01{car_month}{match.group(1)}"
+        formatted_mileage = result["mileage"]
+        formatted_transmission = (
+            "Автомат" if "오토" in result["transmission"] else "Механика"
+        )
+        car_photos = result["images"]
+
+        print_message(f"formatted_car_date: {formatted_car_date}")
 
     if not car_price and car_engine_displacement and formatted_car_date:
         keyboard = types.InlineKeyboardMarkup()
@@ -1290,7 +1407,7 @@ def handle_message(message):
     if user_message == CALCULATE_CAR_TEXT:
         bot.send_message(
             message.chat.id,
-            "Пожалуйста, введите ссылку на автомобиль с сайта www.encar.com:",
+            "Пожалуйста, введите ссылку на автомобиль с одного из сайтов (encar.com, kbchachacha.com, web.chutcha.net):",
         )
 
     elif user_message == "Ручной расчёт":
@@ -1315,7 +1432,10 @@ def handle_message(message):
         )
 
     # Проверка на корректность ссылки
-    elif re.match(r"^https?://(www|fem)\.encar\.com/.*", user_message):
+    elif re.match(
+        r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*",
+        user_message,
+    ):
         calculate_cost(user_message, message)
 
     # Проверка на другие команды
