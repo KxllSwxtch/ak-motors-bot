@@ -459,7 +459,9 @@ def get_car_info(url):
         car_price = vehicle_data.get("base_info", {}).get("plain_price", "")
         car_number = vehicle_data.get("base_info", {}).get("number_plate", "")
         car_year = vehicle_data.get("base_info", {}).get("first_reg_year", "")[2:]
-        car_month = vehicle_data.get("base_info", {}).get("first_reg_month", "")
+        car_month = str(
+            vehicle_data.get("base_info", {}).get("first_reg_month", "")
+        ).zfill(2)
         car_mileage = vehicle_data.get("base_info", {}).get("plain_mileage", "")
         car_fuel = vehicle_data.get("base_info", {}).get("fuel_name", "")
         car_engine_displacement = vehicle_data.get("base_info", {}).get(
@@ -611,7 +613,7 @@ def calculate_cost(link, message):
         )
 
         # Форматируем пробег
-        formatted_mileage = result["mileage"] + " км"
+        formatted_mileage = format_number(result["mileage"]) + " км"
 
         # Определяем КПП
         formatted_transmission = (
@@ -929,28 +931,28 @@ def calculate_cost(link, message):
         )
 
         # Отправляем до 10 фотографий
-        media_group = []
-        for photo_url in sorted(car_photos):
-            try:
-                response = requests.get(photo_url)
-                if response.status_code == 200:
-                    photo = BytesIO(response.content)  # Загружаем фото в память
-                    media_group.append(
-                        types.InputMediaPhoto(photo)
-                    )  # Добавляем в список
+        # media_group = []
+        # for photo_url in sorted(car_photos):
+        #     try:
+        #         response = requests.get(photo_url)
+        #         if response.status_code == 200:
+        #             photo = BytesIO(response.content)  # Загружаем фото в память
+        #             media_group.append(
+        #                 types.InputMediaPhoto(photo)
+        #             )  # Добавляем в список
 
-                    # Если набрали 10 фото, отправляем альбом
-                    if len(media_group) == 10:
-                        bot.send_media_group(message.chat.id, media_group)
-                        media_group.clear()  # Очищаем список для следующей группы
-                else:
-                    print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
-            except Exception as e:
-                print(f"Ошибка при обработке фото {photo_url}: {e}")
+        #             # Если набрали 10 фото, отправляем альбом
+        #             if len(media_group) == 10:
+        #                 bot.send_media_group(message.chat.id, media_group)
+        #                 media_group.clear()  # Очищаем список для следующей группы
+        #         else:
+        #             print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
+        #     except Exception as e:
+        #         print(f"Ошибка при обработке фото {photo_url}: {e}")
 
-        # Отправка оставшихся фото, если их меньше 10
-        if media_group:
-            bot.send_media_group(message.chat.id, media_group)
+        # # Отправка оставшихся фото, если их меньше 10
+        # if media_group:
+        #     bot.send_media_group(message.chat.id, media_group)
 
         bot.send_message(
             message.chat.id,
