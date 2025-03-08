@@ -403,6 +403,87 @@ def get_car_info(url):
             print(
                 "❌ Не удалось найти JSON-данные в <script type='application/ld+json'>"
             )
+    elif "chutcha" in url:
+        print("🔍 Парсим Chutcha.net...")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en,ru;q=0.9,en-CA;q=0.8,la;q=0.7,fr;q=0.6,ko;q=0.5",
+            "Referer": "https://web.chutcha.net/bmc/search?brandGroup=1&modelTree=%7B%7D&priceRange=0%2C0&mileage=0%2C0&year=&saleType=&accident=&fuel=&transmission=&region=&color=&option=&cpo=&theme=&sort=1&currPage=&carType=",
+        }
+
+        response = requests.get(url, headers=headers)
+
+        soup = BeautifulSoup(response.text, "lxml")
+
+        # Extract JSON data from <script type="application/ld+json">
+        script_tag = soup.find("script", {"type": "application/json"})
+        vehicle_data = None
+
+        if not script_tag:
+            return "Error: JSON data not found"
+
+        try:
+            data = json.loads(script_tag.string)
+        except json.JSONDecodeError:
+            return "Error: Failed to parse JSON"
+
+        # Перемещение к ldJson (содержит основную информацию о машине)
+        vehicle_data = (
+            data.get("props", {})
+            .get("pageProps", {})
+            .get("dehydratedState", {})
+            .get("queries", [])[0]
+            .get("state", {})
+            .get("data", {})
+        )
+
+        # Получение изображений
+        img_list_data = vehicle_data.get("img_list", [])
+        img_list = []
+        for query in img_list_data:
+            img_list.append(
+                f"https://imgsc.chutcha.kr{query.get('img_path','').replace('.jpg', '_ori.jpg')}?s=1024x768&t=crop"
+            )
+
+        name = (
+            vehicle_data.get("base_info", {}).get("brand_name", "")
+            + " "
+            + vehicle_data.get("base_info", {}).get("model_name", "")
+            + " "
+            + vehicle_data.get("base_info", {}).get("sub_model_name", "")
+            + " "
+            + vehicle_data.get("base_info", {}).get("grade_name", "")
+        )
+        car_price = vehicle_data.get("base_info", {}).get("plain_price", "")
+        car_number = vehicle_data.get("base_info", {}).get("number_plate", "")
+        car_year = vehicle_data.get("base_info", {}).get("first_reg_year", "")[2:]
+        car_month = vehicle_data.get("base_info", {}).get("first_reg_month", "")
+        car_mileage = vehicle_data.get("base_info", {}).get("plain_mileage", "")
+        car_fuel = vehicle_data.get("base_info", {}).get("fuel_name", "")
+        car_engine_displacement = vehicle_data.get("base_info", {}).get(
+            "displacement", ""
+        )
+        car_transmission = vehicle_data.get("base_info", {}).get(
+            "transmission_name", ""
+        )
+
+        # Формирование итогового JSON
+        car_info = {
+            "name": name,
+            "car_price": car_price,
+            "images": img_list,
+            "number": car_number,
+            "year": car_year,
+            "month": car_month,
+            "mileage": car_mileage,
+            "fuel": car_fuel,
+            "engine_volume": car_engine_displacement,
+            "transmission": car_transmission,
+        }
+
+        return car_info
 
 
 # Function to calculate the total cost
@@ -441,6 +522,20 @@ def calculate_cost(link, message):
             send_error_message(message, "🚫 Не удалось извлечь carSeq из ссылки.")
             return
 
+    elif "web.chutcha.net" in link:
+        parsed_url = urlparse(link)
+        path_parts = parsed_url.path.split("/")
+
+        if len(path_parts) >= 4 and path_parts[-2] == "detail":
+            car_id = path_parts[-1]  # Берём последний элемент из пути
+            car_id_external = car_id
+            link = f"https://web.chutcha.net/bmc/detail/{car_id}"
+        else:
+            send_error_message(
+                message, "🚫 Не удалось извлечь ID автомобиля из ссылки Chutcha.net."
+            )
+            return
+
     else:
         # Извлекаем carid с URL encar
         parsed_url = urlparse(link)
@@ -461,6 +556,8 @@ def calculate_cost(link, message):
             year,
             month,
         ) = result
+
+        preview_link = f"https://fem.encar.com/cars/detail/{car_id}"
 
     # Если ссылка с kbchacha
     if "kbchachacha.com" in link:
@@ -488,6 +585,44 @@ def calculate_cost(link, message):
         )
         car_photos = result["images"]
 
+        preview_link = (
+            f"https://www.kbchachacha.com/public/car/detail.kbc?carSeq={car_id}"
+        )
+
+    if "web.chutcha.net" in link:
+        result = get_car_info(link)
+
+        car_title = result["name"]
+
+        month = result["year"]
+        year = result["month"]
+
+        # Очищаем объём двигателя от "cc"
+        car_engine_displacement = re.sub(r"\D+", "", result["engine_volume"])
+
+        # Преобразуем цену из формата "3,450만원 / 월 62만원"
+        car_price = result["car_price"]
+
+        # Форматируем дату
+        formatted_car_date = (
+            f"01{car_month}{car_year[-2:]}"
+            if car_year != "Не найдено"
+            else "Не найдено"
+        )
+
+        # Форматируем пробег
+        formatted_mileage = result["mileage"] + " км"
+
+        # Определяем КПП
+        formatted_transmission = (
+            "Автомат" if "오토" in result["transmission"] else "Механика"
+        )
+
+        # Получаем фотографии автомобиля
+        car_photos = result["images"]
+
+        preview_link = f"https://web.chutcha.net/bmc/detail/{car_id}"
+
         print_message(f"formatted_car_date: {formatted_car_date}")
 
     if not car_price and car_engine_displacement and formatted_car_date:
@@ -509,13 +644,13 @@ def calculate_cost(link, message):
         bot.delete_message(message.chat.id, processing_message.message_id)
         return
 
-    # Если есть новая ссылка
     if car_price and car_engine_displacement and formatted_car_date:
         car_engine_displacement = int(car_engine_displacement)
 
         # Форматирование данных
         formatted_car_year = f"20{car_year}"
         engine_volume_formatted = f"{format_number(car_engine_displacement)} cc"
+
         age = calculate_age(int(formatted_car_year), car_month)
 
         age_formatted = (
@@ -536,7 +671,7 @@ def calculate_cost(link, message):
         response = get_customs_fees(
             car_engine_displacement,
             price_krw,
-            int(f"20{car_year}"),
+            int(formatted_car_year),
             car_month,
             engine_type=1,
         )
@@ -741,8 +876,6 @@ def calculate_cost(link, message):
             + 8000
         )
 
-        preview_link = f"https://fem.encar.com/cars/detail/{car_id}"
-
         # Формирование сообщения результата
         result_message = (
             f"{car_title}\n\n"
@@ -752,7 +885,7 @@ def calculate_cost(link, message):
             f"КПП: {formatted_transmission}\n\n"
             f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
             f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
-            f"💵 <b>Курс USDT к Вону: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
+            f"💵 <b>Курс USDT к Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
@@ -1433,7 +1566,7 @@ def handle_message(message):
 
     # Проверка на корректность ссылки
     elif re.match(
-        r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*",
+        r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*|^https?://(web\.)?chutcha\.net/.*",
         user_message,
     ):
         calculate_cost(user_message, message)
