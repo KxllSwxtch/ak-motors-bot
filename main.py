@@ -439,6 +439,8 @@ def get_car_info(url):
             .get("data", {})
         )
 
+        print(vehicle_data)
+
         # Получение изображений
         img_list_data = vehicle_data.get("img_list", [])
         img_list = []
@@ -471,6 +473,31 @@ def get_car_info(url):
             "transmission_name", ""
         )
 
+        # Список всех страховых
+        car_history = (
+            vehicle_data.get("safe_info", {})
+            .get("carhistory_safe", {})
+            .get("insurance", {})
+            .get("list", [])
+        )
+
+        # Инициализация сумм страховых выплат
+        own_damage_total = 0  # Выплаты по текущему авто
+        other_damage_total = 0  # Выплаты по другим авто
+
+        # Обработка выплат, если они есть
+        if car_history:
+            for claim in car_history:
+                claim_type = claim.get("type")
+                claim_price = int(
+                    claim.get("price", 0)
+                )  # Преобразуем в число, если есть цена
+
+                if claim_type == "1":  # Выплаты по текущему авто
+                    own_damage_total += claim_price
+                elif claim_type == "2":  # Выплаты по другим авто
+                    other_damage_total += claim_price
+
         # Формирование итогового JSON
         car_info = {
             "name": name,
@@ -483,6 +510,12 @@ def get_car_info(url):
             "fuel": car_fuel,
             "engine_volume": car_engine_displacement,
             "transmission": car_transmission,
+            "insurance_claims": {
+                "own_damage_total": own_damage_total if car_history else "Недоступно",
+                "other_damage_total": (
+                    other_damage_total if car_history else "Недоступно"
+                ),
+            },
         }
 
         return car_info
@@ -625,7 +658,8 @@ def calculate_cost(link, message):
 
         preview_link = f"https://web.chutcha.net/bmc/detail/{car_id}"
 
-        print_message(f"formatted_car_date: {formatted_car_date}")
+        own_car_insurance_payments = result["insurance_claims"]["own_damage_total"]
+        other_car_insurance_payments = result["insurance_claims"]["other_damage_total"]
 
     if not car_price and car_engine_displacement and formatted_car_date:
         keyboard = types.InlineKeyboardMarkup()
@@ -878,6 +912,24 @@ def calculate_cost(link, message):
             + 8000
         )
 
+        car_insurance_payments_chutcha = ""
+        if "web.chutcha.net" in link:
+            own_insurance_text = (
+                f"₩{format_number(own_car_insurance_payments)}"
+                if isinstance(own_car_insurance_payments, int)
+                else "Нет"
+            )
+            other_insurance_text = (
+                f"₩{format_number(other_car_insurance_payments)}"
+                if isinstance(other_car_insurance_payments, int)
+                else "Нет"
+            )
+
+            car_insurance_payments_chutcha = (
+                f"Страховые выплаты по данному автомобилю:\n{own_insurance_text}\n\n"
+                f"Страховые выплаты другому автомобилю:\n{other_insurance_text}"
+            )
+
         # Формирование сообщения результата
         result_message = (
             f"{car_title}\n\n"
@@ -887,6 +939,7 @@ def calculate_cost(link, message):
             f"КПП: {formatted_transmission}\n\n"
             f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
             f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
+            f"{car_insurance_payments_chutcha}\n\n"
             f"💵 <b>Курс USDT к Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
@@ -901,17 +954,19 @@ def calculate_cost(link, message):
         keyboard.add(
             types.InlineKeyboardButton("Детали расчёта", callback_data="detail")
         )
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "Технический Отчёт об Автомобиле", callback_data="technical_card"
+
+        if "fem.encar.com" in link:
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Технический Отчёт об Автомобиле", callback_data="technical_card"
+                )
             )
-        )
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "Выплаты по ДТП",
-                callback_data="technical_report",
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "Выплаты по ДТП",
+                    callback_data="technical_report",
+                )
             )
-        )
         keyboard.add(
             types.InlineKeyboardButton(
                 "Написать менеджеру", url="https://t.me/@timyo97"
@@ -931,28 +986,28 @@ def calculate_cost(link, message):
         )
 
         # Отправляем до 10 фотографий
-        # media_group = []
-        # for photo_url in sorted(car_photos):
-        #     try:
-        #         response = requests.get(photo_url)
-        #         if response.status_code == 200:
-        #             photo = BytesIO(response.content)  # Загружаем фото в память
-        #             media_group.append(
-        #                 types.InputMediaPhoto(photo)
-        #             )  # Добавляем в список
+        media_group = []
+        for photo_url in sorted(car_photos):
+            try:
+                response = requests.get(photo_url)
+                if response.status_code == 200:
+                    photo = BytesIO(response.content)  # Загружаем фото в память
+                    media_group.append(
+                        types.InputMediaPhoto(photo)
+                    )  # Добавляем в список
 
-        #             # Если набрали 10 фото, отправляем альбом
-        #             if len(media_group) == 10:
-        #                 bot.send_media_group(message.chat.id, media_group)
-        #                 media_group.clear()  # Очищаем список для следующей группы
-        #         else:
-        #             print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
-        #     except Exception as e:
-        #         print(f"Ошибка при обработке фото {photo_url}: {e}")
+                    # Если набрали 10 фото, отправляем альбом
+                    if len(media_group) == 10:
+                        bot.send_media_group(message.chat.id, media_group)
+                        media_group.clear()  # Очищаем список для следующей группы
+                else:
+                    print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
+            except Exception as e:
+                print(f"Ошибка при обработке фото {photo_url}: {e}")
 
-        # # Отправка оставшихся фото, если их меньше 10
-        # if media_group:
-        #     bot.send_media_group(message.chat.id, media_group)
+        # Отправка оставшихся фото, если их меньше 10
+        if media_group:
+            bot.send_media_group(message.chat.id, media_group)
 
         bot.send_message(
             message.chat.id,
@@ -1646,5 +1701,4 @@ if __name__ == "__main__":
     get_rub_to_krw_rate()
     get_currency_rates()
     get_usdt_to_krw_rate()
-
     bot.polling(non_stop=True)

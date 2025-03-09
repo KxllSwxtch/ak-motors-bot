@@ -7,7 +7,7 @@ proxies = {"http": PROXY_URL, "https": PROXY_URL}
 
 
 def format_number(number):
-    return locale.format_string("%d", number, grouping=True)
+    return locale.format_string("%d", int(number), grouping=True)
 
 
 def calculate_age(year, month):
