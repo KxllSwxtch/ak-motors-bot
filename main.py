@@ -55,6 +55,276 @@ usd_to_rub_rate = 0
 usdt_to_krw_rate = 0
 
 
+################## КОД ДЛЯ СТАТУСОВ
+# Для заказов
+MANAGERS = [728438182]
+# Храним заказы пользователей
+user_orders = {}
+ORDER_STATUSES = [
+    "🚗 Авто выкуплен (на базе)",
+    "🚢 Отправлен в порт г. Пусан на погрузку",
+    "🌊 В пути во Владивосток",
+    "🛃 Таможенная очистка",
+    "📦 Погрузка до МСК",
+    "🚛 Доставляется клиенту",
+]
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("add_favorite_"))
+def add_favorite_car(call):
+    global car_data
+    user_id = call.message.chat.id
+
+    if not car_data or "name" not in car_data:
+        bot.answer_callback_query(
+            call.id, "🚫 Ошибка: Данные о машине отсутствуют.", show_alert=True
+        )
+        return
+
+    if user_id not in user_orders:
+        user_orders[user_id] = []
+
+    car_info = {
+        "id": car_data.get("car_id", "Нет ID"),
+        "title": car_data.get("name", "Неизвестно"),
+        "price": f"₩{format_number(car_data.get('car_price', 0))}",
+        "link": car_data.get("link", "Нет ссылки"),
+        "year": car_data.get("year", "Неизвестно"),
+        "month": car_data.get("month", "Неизвестно"),
+        "mileage": car_data.get("mileage", "Неизвестно"),
+        "fuel": car_data.get("fuel", "Неизвестно"),
+        "engine_volume": car_data.get("engine_volume", "Неизвестно"),
+        "transmission": car_data.get("transmission", "Неизвестно"),
+        "images": car_data.get("images", []),
+        "status": "🔄 Не заказано",  # Добавляем статус по умолчанию
+    }
+
+    user_orders[user_id].append(car_info)
+    bot.answer_callback_query(
+        call.id, "⭐ Автомобиль добавлен в избранное!", show_alert=True
+    )
+
+
+@bot.message_handler(commands=["my_cars"])
+def show_favorite_cars(message):
+    user_id = message.chat.id
+
+    # Проверяем, есть ли у пользователя сохранённые авто
+    if user_id not in user_orders or not user_orders[user_id]:
+        bot.send_message(user_id, "❌ У вас нет сохранённых автомобилей.")
+        return
+
+    # Формируем список автомобилей
+    response_text = "📋 *Ваши сохранённые автомобили:*\n\n"
+    keyboard = types.InlineKeyboardMarkup()
+
+    for car in user_orders[user_id]:
+        # Проверяем, есть ли у машины статус, если нет — ставим "🔄 Не заказано"
+        car_status = car.get("status", "🔄 Не заказано")
+
+        response_text += (
+            f"🚗 [{car['title']}]({car['link']})\n*Статус:* {car_status}\n\n"
+        )
+
+        if car_status == "🔄 Не заказано":
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    f"📦 Заказать {car['title']}",
+                    callback_data=f"order_car_{car['id']}",
+                )
+            )
+
+    bot.send_message(
+        user_id, response_text, parse_mode="Markdown", reply_markup=keyboard
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("order_car_"))
+def order_car(call):
+    user_id = call.message.chat.id
+    car_id = call.data.split("_")[-1]  # Получаем ID автомобиля
+
+    # Проверяем, есть ли авто в сохранённых
+    if user_id not in user_orders or not user_orders[user_id]:
+        bot.answer_callback_query(call.id, "❌ У вас нет сохранённых автомобилей.")
+        return
+
+    for car in user_orders[user_id]:
+        if car["id"] == car_id:
+            if car["status"] != "🔄 Не заказано":
+                bot.answer_callback_query(call.id, "⚠️ Этот автомобиль уже заказан!")
+                return
+
+            # Обновляем статус
+            car["status"] = "⏳ Ожидает подтверждения"
+
+            # Отправляем заявку менеджерам
+            order_text = (
+                f"🚗 *Новый заказ на автомобиль!*\n\n"
+                f"👤 *Пользователь:* [{call.from_user.first_name}](tg://user?id={user_id})\n"
+                f"🔗 [Ссылка на автомобиль]({car['link']})\n"
+                f"📌 Статус: {car['status']}"
+            )
+
+            for manager_id in MANAGERS:
+                bot.send_message(manager_id, order_text, parse_mode="Markdown")
+
+            # Сообщаем пользователю
+            bot.answer_callback_query(call.id, "✅ Заявка отправлена менеджерам!")
+
+            # Обновляем сообщение с автомобилями
+            show_favorite_cars(call.message)
+            return
+
+
+@bot.message_handler(commands=["orders"])
+def show_orders(message):
+    user_id = message.chat.id
+
+    # Проверяем, является ли пользователь менеджером
+    if user_id not in MANAGERS:
+        bot.send_message(user_id, "❌ У вас нет доступа к заказам.")
+        return
+
+    # Проверяем, есть ли заказы
+    if not user_orders:
+        bot.send_message(user_id, "📭 Нет активных заказов.")
+        return
+
+    response_text = "📋 *Текущие заказы:*\n\n"
+    keyboard = types.InlineKeyboardMarkup()
+
+    # Теперь правильно обрабатываем `user_orders`, который хранит данные по пользователям
+    for user, orders in user_orders.items():
+        for order in orders:  # Проходим по списку заказов
+            response_text += (
+                f"🚗 [{order['title']}]({order['link']})\n"
+                f"👤 Заказчик: [{order.get('user_name', 'Неизвестный')}]"
+                f"(tg://user?id={order.get('user_id', user)})\n"
+                f"📌 *Статус:* {order.get('status', '🔄 Не заказано')}\n\n"
+            )
+
+            # Добавляем кнопку обновления статуса
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    f"📌 Обновить статус ({order['title']})",
+                    callback_data=f"update_status_{user}",
+                )
+            )
+
+    bot.send_message(
+        user_id, response_text, parse_mode="Markdown", reply_markup=keyboard
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("update_status_"))
+def update_order_status(call):
+    manager_id = call.message.chat.id
+    order_id = call.data.split("_")[-1]
+
+    # Проверяем, существует ли заказ
+    if order_id not in user_orders:
+        bot.answer_callback_query(call.id, "❌ Заказ не найден.")
+        return
+
+    # Формируем список доступных статусов
+    keyboard = types.InlineKeyboardMarkup()
+    for status in ORDER_STATUSES:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                status, callback_data=f"set_status_{order_id}_{status}"
+            )
+        )
+
+    bot.send_message(manager_id, "Выберите новый статус:", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("set_status_"))
+def set_new_status(call):
+    manager_id = call.message.chat.id
+    data_parts = call.data.split("_")
+    order_id = data_parts[2]
+    new_status = "_".join(data_parts[3:])  # Собираем новый статус
+
+    if order_id not in user_orders:
+        bot.answer_callback_query(call.id, "❌ Ошибка: заказ не найден.")
+        return
+
+    user_orders[order_id]["status"] = new_status
+    user_id = user_orders[order_id]["user_id"]
+
+    # Обновляем статус у клиента
+    bot.send_message(
+        user_id,
+        f"📢 *Обновление статуса заказа!*\n\n"
+        f"🚗 [{user_orders[order_id]['title']}]({user_orders[order_id]['link']})\n"
+        f"📌 Новый статус: *{new_status}*",
+        parse_mode="Markdown",
+    )
+
+    # Подтверждение менеджеру
+    bot.answer_callback_query(call.id, f"✅ Статус обновлён на {new_status}!")
+
+    # Автоархивация завершённых заказов
+    archive_completed_orders()
+
+    # Обновляем список заказов у менеджеров
+    show_orders(call.message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("place_order_"))
+def place_order(call):
+    user_id = call.message.chat.id
+    order_id = call.data.split("_")[-1]
+
+    # Проверяем, есть ли этот заказ
+    if order_id not in user_orders:
+        bot.answer_callback_query(call.id, "❌ Ошибка: заказ не найден.")
+        return
+
+    order = user_orders[order_id]
+
+    # Создаём кнопку "Обновить статус" (только для менеджеров)
+    keyboard = types.InlineKeyboardMarkup()
+    if user_id in MANAGERS:
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "📌 Обновить статус", callback_data=f"update_status_{order_id}"
+            )
+        )
+
+    bot.send_message(
+        user_id,
+        f"📢 *Заказ оформлен!*\n\n"
+        f"🚗 [{order['title']}]({order['link']})\n"
+        f"👤 Клиент: [{order['user_name']}](tg://user?id={order['user_id']})\n"
+        f"📌 *Текущий статус:* {order['status']}",
+        parse_mode="Markdown",
+        reply_markup=keyboard,
+    )
+
+    bot.answer_callback_query(call.id, "✅ Заказ отправлен менеджерам!")
+
+
+def archive_completed_orders():
+    global user_orders
+
+    completed_orders = [
+        order_id
+        for order_id, data in user_orders.items()
+        if data["status"] == "🚛 Доставляется клиенту"
+    ]
+
+    for order_id in completed_orders:
+        del user_orders[order_id]  # Удаляем заказ из активных
+
+    if completed_orders:
+        print(f"✅ Архивировано {len(completed_orders)} завершённых заказов.")
+
+
+################## КОД ДЛЯ СТАТУСОВ
+
+
 def print_message(message):
     print("\n\n##############")
     print(f"{message}")
@@ -67,7 +337,18 @@ def set_bot_commands():
     commands = [
         types.BotCommand("start", "Запустить бота"),
         types.BotCommand("cbr", "Курсы валют"),
+        types.BotCommand("my_cars", "Мои избранные автомобили"),
     ]
+
+    # Проверяем, является ли пользователь менеджером
+    user_id = bot.get_me().id
+    if user_id in MANAGERS:
+        commands.extend(
+            [
+                types.BotCommand("orders", "Просмотр всех заказов (для менеджеров)"),
+            ]
+        )
+
     bot.set_my_commands(commands)
 
 
@@ -438,8 +719,6 @@ def get_car_info(url):
             .get("state", {})
             .get("data", {})
         )
-
-        print(vehicle_data)
 
         # Получение изображений
         img_list_data = vehicle_data.get("img_list", [])
@@ -945,7 +1224,7 @@ def calculate_cost(link, message):
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
             f"▪️ +82 10-5528-0997 (Тимур)\n"
-            f"▪️ +82 10-5128-8082 (Александр) \n\n"
+            # f"▪️ +82 10-5128-8082 (Александр) \n\n"
             "🔗 <a href='https://t.me/akmotors96'>Официальный телеграм канал</a>\n"
         )
 
@@ -953,6 +1232,14 @@ def calculate_cost(link, message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton("Детали расчёта", callback_data="detail")
+        )
+
+        # Кнопка для добавления в избранное
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "⭐ Добавить в избранное",
+                callback_data=f"add_favorite_{car_id_external}",
+            )
         )
 
         if "fem.encar.com" in link:
@@ -986,28 +1273,38 @@ def calculate_cost(link, message):
         )
 
         # Отправляем до 10 фотографий
-        media_group = []
-        for photo_url in sorted(car_photos):
-            try:
-                response = requests.get(photo_url)
-                if response.status_code == 200:
-                    photo = BytesIO(response.content)  # Загружаем фото в память
-                    media_group.append(
-                        types.InputMediaPhoto(photo)
-                    )  # Добавляем в список
+        # media_group = []
+        # for photo_url in sorted(car_photos):
+        #     try:
+        #         response = requests.get(photo_url)
+        #         if response.status_code == 200:
+        #             photo = BytesIO(response.content)  # Загружаем фото в память
+        #             media_group.append(
+        #                 types.InputMediaPhoto(photo)
+        #             )  # Добавляем в список
 
-                    # Если набрали 10 фото, отправляем альбом
-                    if len(media_group) == 10:
-                        bot.send_media_group(message.chat.id, media_group)
-                        media_group.clear()  # Очищаем список для следующей группы
-                else:
-                    print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
-            except Exception as e:
-                print(f"Ошибка при обработке фото {photo_url}: {e}")
+        #             # Если набрали 10 фото, отправляем альбом
+        #             if len(media_group) == 10:
+        #                 bot.send_media_group(message.chat.id, media_group)
+        #                 media_group.clear()  # Очищаем список для следующей группы
+        #         else:
+        #             print(f"Ошибка загрузки фото: {photo_url} - {response.status_code}")
+        #     except Exception as e:
+        #         print(f"Ошибка при обработке фото {photo_url}: {e}")
 
-        # Отправка оставшихся фото, если их меньше 10
-        if media_group:
-            bot.send_media_group(message.chat.id, media_group)
+        # # Отправка оставшихся фото, если их меньше 10
+        # if media_group:
+        #     bot.send_media_group(message.chat.id, media_group)
+
+        car_data["name"] = car_title
+        car_data["images"] = car_photos if isinstance(car_photos, list) else []
+        car_data["link"] = preview_link
+        car_data["year"] = year
+        car_data["month"] = month
+        car_data["mileage"] = formatted_mileage
+        car_data["engine_volume"] = car_engine_displacement
+        car_data["transmission"] = formatted_transmission
+        car_data["car_price"] = price_krw
 
         bot.send_message(
             message.chat.id,
@@ -1210,7 +1507,7 @@ def handle_callback_query(call):
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
             f"▪️ +82 10-2934-8855 (Артур)\n"
             f"▪️ +82 10-5528-0997 (Тимур)\n"
-            f"▪️ +82 10-5128-8082 (Александр)\n\n"
+            # f"▪️ +82 10-5128-8082 (Александр)\n\n"
         )
 
         # Inline buttons for further actions
@@ -1560,7 +1857,7 @@ def process_car_price(message):
         f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
         f"▪️ +82 10-2934-8855 (Артур)\n"
         f"▪️ +82 10-5528-0997 (Тимур)\n"
-        f"▪️ +82 10-5128-8082 (Александр)\n\n"
+        # f"▪️ +82 10-5128-8082 (Александр)\n\n"
     )
 
     # Клавиатура с дальнейшими действиями
@@ -1634,7 +1931,7 @@ def handle_message(message):
             {"name": "Ким Артур (Корея)", "whatsapp": "https://wa.me/821029348855"},
             {"name": "Ким Артур (Россия)", "whatsapp": "https://wa.me/79999000070"},
             {"name": "Тимур", "whatsapp": "https://wa.me/821055280997"},
-            {"name": "Александр", "whatsapp": "https://wa.me/821051288082"},
+            # {"name": "Александр", "whatsapp": "https://wa.me/821051288082"},
         ]
 
         # Формируем сообщение со списком менеджеров
