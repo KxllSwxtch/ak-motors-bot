@@ -69,6 +69,10 @@ user_orders = {
             "mileage": "24,054 км",
             "engine_volume": 1998,
             "transmission": "Автомат",
+            "first_name": "Дмитрий",
+            "last_name": "Шин",
+            "user_name": "@dmitriyshin99",
+            "phone_number": "821065763105",
             "images": [
                 "https://ci.encar.com//carpicture04/pic3894/38941549_019.jpg",
                 "https://ci.encar.com//carpicture04/pic3894/38941549_022.jpg",
@@ -96,6 +100,10 @@ user_orders = {
             "mileage": "27,706 км",
             "engine_volume": 2995,
             "transmission": "Автомат",
+            "first_name": "Дмитрий",
+            "last_name": "Шин",
+            "user_name": "@dmitriyshin99",
+            "phone_number": "821065763105",
             "images": [
                 "https://ci.encar.com//carpicture04/pic3834/38342004_001.jpg",
                 "https://ci.encar.com//carpicture04/pic3834/38342004_018.jpg",
@@ -255,7 +263,6 @@ def order_car(call):
 
 
 # Обработчик получения номера телефона
-# Обработчик получения номера телефона
 @bot.message_handler(content_types=["contact"])
 def receive_phone_number(message):
     user_id = message.chat.id
@@ -293,10 +300,9 @@ def process_order(user_id, car_id, username, phone_number):
 
     # Сообщение менеджеру
     manager_text = (
-        f"📢 *Новый заказ авто!*\n\n"
-        f"🚗 *Модель:* {car_title}\n"
+        f"📢 *Новый заказ на автомобиль!*\n\n"
+        f"🚗 {car_title}\n"
         f"🔗 [Ссылка на автомобиль]({car_link})\n\n"
-        f"👤 *Клиент:*\n"
         f"🔹 Username: @{username if username else 'Не указан'}\n"
         f"📞 Телефон: {phone_number if phone_number else 'Не указан'}\n"
     )
@@ -325,31 +331,48 @@ def show_orders(message):
         bot.send_message(manager_id, "📭 Нет активных заказов.")
         return
 
-    response_text = "📋 *Текущие заказы:*\n\n"
-    keyboard = types.InlineKeyboardMarkup()
-
     # Перебираем всех пользователей и их заказы
     for user_id, orders in user_orders.items():
         for order in orders:
-            response_text += (
-                f"🚗 [{order['title']}]({order['link']})\n"
-                f"👤 Заказчик: [{order.get('user_name', 'Неизвестный')}]"
-                f"(tg://user?id={user_id})\n"
-                f"📌 *Статус:* {order.get('status', '🔄 Не заказано')}\n\n"
+            car_title = order.get("title", "🚗 Автомобиль")
+            car_link = order.get("link", "Нет ссылки")
+            user_name = order.get("first_name", "Неизвестный")
+            phone_number = order.get("phone_number", "Неизвестно")
+            car_status = order.get("status", "🔄 Не заказано")
+            car_price = order.get("price", "💰 Цена неизвестна")
+            car_mileage = order.get("mileage", "❓ Пробег неизвестен")
+            car_engine = order.get("engine_volume", "❓ Объём неизвестен")
+            car_transmission = order.get("transmission", "❓ КПП неизвестно")
+            car_images = order.get("images", [])
+
+            # Формируем текст карточки
+            response_text = (
+                f"🚗 *{car_title}*\n"
+                f"💰 Цена: {car_price}\n"
+                f"📅 Пробег: {car_mileage}\n"
+                f"🏎 Объём двигателя: {car_engine} cc\n"
+                f"⚙️ КПП: {car_transmission}\n"
+                f"📌 *Статус:* {car_status}\n\n"
+                f"👤 Заказчик: [{user_name}](tg://user?id={user_id})\n"
+                f"📞 Номер телефона: {phone_number}\n"
+                f"[🔗 Ссылка на авто]({car_link})"
             )
 
-            # Кнопка обновления статуса (только для менеджеров!)
+            # Создаём клавиатуру с кнопкой "Обновить статус"
+            keyboard = types.InlineKeyboardMarkup()
             keyboard.add(
                 types.InlineKeyboardButton(
-                    f"📌 Обновить статус ({order['title']})",
-                    callback_data=f"update_status_{user_id}_{order['id']}",  # Передаём user_id + order_id
+                    f"📌 Обновить статус",
+                    callback_data=f"update_status_{user_id}_{order['id']}",
                 )
             )
 
-    # **Отправляем список только менеджеру, а не клиенту!**
-    bot.send_message(
-        manager_id, response_text, parse_mode="Markdown", reply_markup=keyboard
-    )
+            bot.send_message(
+                manager_id,
+                response_text,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("update_status_"))
@@ -1505,6 +1528,9 @@ def calculate_cost(link, message):
         car_data["engine_volume"] = car_engine_displacement
         car_data["transmission"] = formatted_transmission
         car_data["car_price"] = price_krw
+        car_data["user_name"] = message.from_user.username
+        car_data["first_name"] = message.from_user.first_name
+        car_data["last_name"] = message.from_user.last_name
 
         bot.send_message(
             message.chat.id,
