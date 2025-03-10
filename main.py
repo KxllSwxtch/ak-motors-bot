@@ -7,10 +7,19 @@ import locale
 import logging
 import urllib.parse
 
+from database import (
+    create_tables,
+    get_orders,
+    get_all_orders,
+    add_order,
+    update_user_phone,
+    update_order_status_in_db,
+)
 from bs4 import BeautifulSoup
 from io import BytesIO
 from telebot import types
 from dotenv import load_dotenv
+from types import SimpleNamespace
 from urllib.parse import urlparse, parse_qs
 from utils import (
     generate_encar_photo_url,
@@ -57,72 +66,7 @@ usdt_to_krw_rate = 0
 
 ################## КОД ДЛЯ СТАТУСОВ
 # Храним заказы пользователей
-user_orders = {
-    7311646338: [
-        {
-            "id": "38947857",
-            "title": "Hyundai Tucson N Line Inspiration",
-            "price": "₩31,900,000",
-            "link": "https://fem.encar.com/cars/detail/38947857",
-            "year": "23",
-            "month": "01",
-            "mileage": "24,054 км",
-            "engine_volume": 1998,
-            "transmission": "Автомат",
-            "first_name": "Дмитрий",
-            "last_name": "Шин",
-            "user_name": "@dmitriyshin99",
-            "phone_number": "821065763105",
-            "images": [
-                "https://ci.encar.com//carpicture04/pic3894/38941549_019.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_022.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_024.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_007.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_008.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_018.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_001.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_015.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_003.jpg",
-                "https://ci.encar.com//carpicture04/pic3894/38941549_017.jpg",
-            ],
-            "status": "🕒 Ожидает подтверждения",
-            "total_cost_usd": 39781.206119598035,
-            "total_cost_krw": 58852316.33333334,
-            "total_cost_rub": 3580308.550763823,
-        },
-        {
-            "id": "38343298",
-            "title": "Porsche Cayenne ",
-            "price": "₩135,500,000",
-            "link": "https://fem.encar.com/cars/detail/38343298",
-            "year": "22",
-            "month": "12",
-            "mileage": "27,706 км",
-            "engine_volume": 2995,
-            "transmission": "Автомат",
-            "first_name": "Дмитрий",
-            "last_name": "Шин",
-            "user_name": "@dmitriyshin99",
-            "phone_number": "821065763105",
-            "images": [
-                "https://ci.encar.com//carpicture04/pic3834/38342004_001.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_018.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_001.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_010.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_020.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_001.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_024.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_015.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_001.jpg",
-                "https://ci.encar.com//carpicture04/pic3834/38342004_023.jpg",
-            ],
-            "status": "🕒 Ожидает подтверждения",
-            "total_cost_usd": 146560.792765382,
-            "total_cost_krw": 216763412.5,
-            "total_cost_rub": 13190471.348884381,
-        },
-    ]
-}
+pending_orders = {}
 user_contacts = {}
 
 MANAGERS = [728438182]
@@ -148,11 +92,23 @@ def add_favorite_car(call):
         )
         return
 
-    if user_id not in user_orders:
-        user_orders[user_id] = []
+    # Проверяем, есть ли авто уже в избранном
+    existing_orders = get_orders(user_id)
+    if any(order["id"] == car_data.get("car_id") for order in existing_orders):
+        bot.answer_callback_query(call.id, "✅ Этот автомобиль уже в избранном.")
+        return
 
-    car_info = {
-        "id": car_data.get("car_id", "Нет ID"),
+    # Получаем данные пользователя
+    user = bot.get_chat(user_id)
+    user_name = user.username if user.username else "Неизвестно"
+
+    # Проверяем, есть ли сохранённый номер телефона пользователя
+    phone_number = user_contacts.get(user_id, "Неизвестно")
+
+    # Формируем объект заказа
+    order_data = {
+        "user_id": user_id,
+        "car_id": car_data.get("car_id", "Нет ID"),
         "title": car_data.get("name", "Неизвестно"),
         "price": f"₩{format_number(car_data.get('car_price', 0))}",
         "link": car_data.get("link", "Нет ссылки"),
@@ -167,9 +123,17 @@ def add_favorite_car(call):
         "total_cost_usd": car_data.get("total_cost_usd", 0),
         "total_cost_krw": car_data.get("total_cost_krw", 0),
         "total_cost_rub": car_data.get("total_cost_rub", 0),
+        "user_name": user_name,  # ✅ Добавляем user_name
+        "phone_number": phone_number,  # ✅ Добавляем phone_number (если нет, "Неизвестно")
     }
 
-    user_orders[user_id].append(car_info)
+    # Логируем, чтобы проверить, какие данные отправляем в БД
+    print(f"✅ Добавляем заказ: {order_data}")
+
+    # Сохраняем в базу
+    add_order(order_data)
+
+    # Подтверждаем пользователю
     bot.answer_callback_query(
         call.id, "⭐ Автомобиль добавлен в избранное!", show_alert=True
     )
@@ -178,31 +142,31 @@ def add_favorite_car(call):
 @bot.message_handler(commands=["my_cars"])
 def show_favorite_cars(message):
     user_id = message.chat.id
+    orders = get_orders(user_id)  # Берём заказы из БД
 
-    # Проверяем, есть ли у пользователя сохранённые авто
-    if user_id not in user_orders or not user_orders[user_id]:
+    if not orders:
         bot.send_message(user_id, "❌ У вас нет сохранённых автомобилей.")
         return
 
-    for car in user_orders[user_id]:
-        car_id = car.get("id", "Неизвестно")
-        car_title = car.get("title", "Неизвестно")
-        car_status = car.get("status", "🔄 Не заказано")
-        car_link = car.get("link", "Нет ссылки")
-        car_year = car.get("year", "Неизвестно")
-        car_month = car.get("month", "Неизвестно")
-        car_mileage = car.get("mileage", "Неизвестно")
-        car_engine_volume = car.get("engine_volume", "Неизвестно")
-        car_transmission = car.get("transmission", "Неизвестно")
-        total_cost_usd = car.get("total_cost_usd", 0)
-        total_cost_krw = car.get("total_cost_krw", "")
-        total_cost_rub = car.get("total_cost_rub", "")
+    for car in orders:
+        car_id = car["car_id"]  # Используем car_id вместо id
+        car_title = car["title"]
+        car_status = car["status"]
+        car_link = car["link"]
+        car_year = car["year"]
+        car_month = car["month"]
+        car_mileage = car["mileage"]
+        car_engine_volume = car["engine_volume"]
+        car_transmission = car["transmission"]
+        total_cost_usd = car["total_cost_usd"]
+        total_cost_krw = car["total_cost_krw"]
+        total_cost_rub = car["total_cost_rub"]
 
         # Формируем текст сообщения
         response_text = (
             f"🚗 *{car_title} ({car_id})*\n\n"
             f"📅 {car_month}/{car_year} | ⚙️ {car_transmission}\n"
-            f"🔢 Пробег: {car_mileage} | 🏎 Объём: {car_engine_volume} cc\n\n"
+            f"🔢 Пробег: {car_mileage} | 🏎 Объём: {format_number(car_engine_volume)} cc\n\n"
             f"Стоимость авто под ключ:\n"
             f"${format_number(total_cost_usd)} | ₩{format_number(total_cost_krw)} | {format_number(total_cost_rub)} ₽\n\n"
             f"📌 *Статус:* {car_status}\n\n"
@@ -211,8 +175,6 @@ def show_favorite_cars(message):
 
         # Создаём клавиатуру
         keyboard = types.InlineKeyboardMarkup()
-
-        # Кнопка "Заказать" только для незакзанных авто
         if car_status == "🔄 Не заказано":
             keyboard.add(
                 types.InlineKeyboardButton(
@@ -226,59 +188,124 @@ def show_favorite_cars(message):
         )
 
 
+def notify_managers(order):
+    """Отправляем информацию о заказе всем менеджерам"""
+    print(f"🔎 Отправляем заказ менеджерам: {order_found}")
+
+    for manager_id in MANAGERS:
+        bot.send_message(
+            manager_id,
+            f"🚨 *Новый заказ!*\n\n"
+            f"🚗 [{order['title']}]({order['link']})\n"
+            f"👤 Заказчик: [{order.get('user_name', 'Неизвестный')}]"
+            f"(tg://user?id={order['user_id']})\n"
+            f"📞 Контакт: {order.get('phone_number', 'Не указан')}\n"
+            f"📌 *Статус:* {order.get('status', '🕒 Ожидает подтверждения')}\n\n",
+            parse_mode="Markdown",
+        )
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("order_car_"))
 def order_car(call):
     user_id = call.message.chat.id
-    car_id = call.data.split("_")[-1]  # Получаем ID авто из callback_data
+    car_id = call.data.split("_")[-1]
 
-    # Проверяем контактные данные
-    user = call.from_user
-    username = user.username
-    phone_number = user_contacts.get(user_id)  # Теперь берём номер из user_contacts
+    print(f"📦 Из callback получен car_id: {car_id} (тип данных: {type(car_id)})")
 
-    if not username and not phone_number:
-        # Если нет данных – запрашиваем телефон
-        bot.send_message(
-            user_id, "📞 Укажите ваш контактный номер телефона для связи с менеджером."
-        )
+    # Получаем авто из базы
+    user_orders = get_orders(user_id)
+    order_found = None
 
-        # Сохраняем ожидание ввода телефона
-        user_contacts[user_id] = car_id
+    for order in user_orders:
+        print(f"📝 Доступный заказ: {order}")
 
-        # Отправляем кнопку запроса номера телефона
-        keyboard = types.ReplyKeyboardMarkup(
-            resize_keyboard=True, one_time_keyboard=True
-        )
-        keyboard.add(
-            types.KeyboardButton("📱 Отправить номер телефона", request_contact=True)
-        )
+        if str(order["car_id"]) == str(car_id):
+            order_found = order
+            break
+        else:
+            print(f"❌ Автомобиль {car_id} не совпадает с {order['car_id']}")
+
+    if not order_found:
+        print(f"❌ Ошибка: авто {car_id} не найдено в базе!")
+        bot.send_message(user_id, "❌ Ошибка: автомобиль не найден.")
+        return
+
+    # Проверяем, есть ли у пользователя номер телефона
+    if user_id not in user_contacts:
+        print(f"📞 Запрашиваем телефон у {user_id}")
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        button = types.KeyboardButton("📞 Отправить номер", request_contact=True)
+        markup.add(button)
+
         bot.send_message(
             user_id,
-            "Нажмите на кнопку ниже, чтобы отправить номер телефона:",
-            reply_markup=keyboard,
+            "📲 Для оформления заказа, пожалуйста, отправьте номер телефона, "
+            "на который зарегистрирован WhatsApp или Telegram.",
+            reply_markup=markup,
         )
-    else:
-        # Данные есть – оформляем заказ
-        process_order(user_id, car_id, username, phone_number)
+
+        # Сохраняем ID заказа в `pending_orders`, а не `user_contacts`
+        pending_orders[user_id] = car_id
+        return
+
+    # Если телефон уже есть → обновляем заказ
+    phone_number = user_contacts[user_id]
+    update_order_status(car_id, "🕒 Ожидает подтверждения")
+
+    bot.send_message(
+        user_id,
+        f"✅ Ваш заказ на {order_found['title']} оформлен!\n"
+        f"📌 Статус: 🕒 Ожидает подтверждения\n"
+        f"📞 Контакт для связи: {phone_number}",
+    )
+
+    notify_managers(order_found)
 
 
 # Обработчик получения номера телефона
 @bot.message_handler(content_types=["contact"])
-def receive_phone_number(message):
+def handle_contact(message):
     user_id = message.chat.id
+    phone_number = message.contact.phone_number
 
-    # Проверяем, ожидаем ли номер телефона от этого пользователя
-    if user_id in user_contacts:
-        phone_number = message.contact.phone_number  # Получаем номер телефона
-        car_id = user_contacts.pop(user_id)  # Получаем ID авто, которое хотели заказать
+    # Сохраняем номер телефона
+    user_contacts[user_id] = phone_number
+    bot.send_message(user_id, f"✅ Ваш номер {phone_number} сохранён!")
 
-        # Сохраняем номер телефона в user_contacts
-        user_contacts[user_id] = phone_number
+    # Проверяем, есть ли ожидаемый заказ
+    if user_id in pending_orders:
+        car_id = pending_orders[user_id]  # Берём car_id из `pending_orders`
+        print(f"📦 Пользователь {user_id} подтвердил заказ автомобиля {car_id}")
 
-        bot.send_message(user_id, "✅ Спасибо! Ваш номер телефона сохранён.")
+        # Получаем заказанное авто из базы
+        user_orders = get_orders(user_id)
+        order_found = None
 
-        # Запускаем процесс оформления заказа
-        process_order(user_id, car_id, message.from_user.username, phone_number)
+        for order in user_orders:
+            if str(order["car_id"]).strip() == str(car_id).strip():
+                order_found = order
+                break
+            else:
+                print(f"❌ Автомобиль {car_id} не совпадает с {order['car_id']}")
+
+        if not order_found:
+            bot.send_message(user_id, "❌ Ошибка: автомобиль не найден в базе данных.")
+            return
+
+        update_order_status_in_db(car_id, "🕒 Ожидает подтверждения")
+
+        bot.send_message(
+            user_id,
+            f"✅ Ваш заказ на {order_found['title']} оформлен!\n"
+            f"📌 Статус: 🕒 Ожидает подтверждения\n"
+            f"📞 Контакт для связи: {phone_number}",
+        )
+
+        # Отправляем информацию менеджерам
+        notify_managers(order_found)
+
+        # Удаляем `pending_orders`
+        del pending_orders[user_id]
 
 
 # Функция оформления заказа
@@ -326,87 +353,79 @@ def show_orders(message):
         bot.send_message(manager_id, "❌ У вас нет доступа к заказам.")
         return
 
-    # Проверяем, есть ли заказы
-    if not user_orders:
+    # Загружаем все заказы из базы данных
+    orders = get_all_orders()
+
+    if not orders:
         bot.send_message(manager_id, "📭 Нет активных заказов.")
         return
 
-    # Перебираем всех пользователей и их заказы
-    for user_id, orders in user_orders.items():
-        for order in orders:
-            car_title = order.get("title", "🚗 Автомобиль")
-            car_link = order.get("link", "Нет ссылки")
-            user_name = order.get("first_name", "Неизвестный")
-            phone_number = order.get("phone_number", "Неизвестно")
-            car_status = order.get("status", "🔄 Не заказано")
-            car_price = order.get("price", "💰 Цена неизвестна")
-            car_mileage = order.get("mileage", "❓ Пробег неизвестен")
-            car_engine = order.get("engine_volume", "❓ Объём неизвестен")
-            car_transmission = order.get("transmission", "❓ КПП неизвестно")
-            car_images = order.get("images", [])
+    for order in orders:
+        order_id = order.get("id", "Неизвестно")
+        car_title = order.get("title", "Неизвестно")
+        user_id = order.get("user_id", "Неизвестно")
+        user_name = order.get("user_name", "Неизвестный")
+        phone_number = order.get("phone_number", "Неизвестно")
+        car_status = order.get("status", "🔄 Не заказано")
+        car_link = order.get("link", "Нет ссылки")
+        car_id = order.get(
+            "car_id", "Неизвестно"
+        )  # ✅ Теперь используем car_id вместо id
 
-            # Формируем текст карточки
-            response_text = (
-                f"🚗 *{car_title}*\n"
-                f"💰 Цена: {car_price}\n"
-                f"📅 Пробег: {car_mileage}\n"
-                f"🏎 Объём двигателя: {car_engine} cc\n"
-                f"⚙️ КПП: {car_transmission}\n"
-                f"📌 *Статус:* {car_status}\n\n"
-                f"👤 Заказчик: [{user_name}](tg://user?id={user_id})\n"
-                f"📞 Номер телефона: {phone_number}\n"
-                f"[🔗 Ссылка на авто]({car_link})"
-            )
+        # Формируем текст сообщения
+        response_text = (
+            f"🚗 *{car_title} ({car_id})*\n\n"
+            f"👤 Заказчик: [{user_name}](tg://user?id={user_id})\n"
+            f"📞 Телефон: {phone_number}\n"
+            f"📌 *Статус:* {car_status}\n\n"
+            f"[🔗 Ссылка на автомобиль]({car_link})"
+        )
 
-            # Создаём клавиатуру с кнопкой "Обновить статус"
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(
-                types.InlineKeyboardButton(
-                    f"📌 Обновить статус",
-                    callback_data=f"update_status_{user_id}_{order['id']}",
-                )
+        # Кнопка обновления статуса (только для менеджеров!)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"📌 Обновить статус ({car_title})",
+                callback_data=f"update_status_{order_id}",
             )
+        )
 
-            bot.send_message(
-                manager_id,
-                response_text,
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
+        bot.send_message(
+            manager_id, response_text, parse_mode="Markdown", reply_markup=keyboard
+        )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("update_status_"))
 def update_order_status(call):
     manager_id = call.message.chat.id
-    order_id = call.data.split("_")[-1]
+    order_id = call.data.split("_")[-1]  # ❗ Здесь приходит ID заказа, а не car_id
 
     print(f"🔍 Менеджер {manager_id} пытается обновить статус заказа {order_id}")
 
-    order_found = None
-    user_id_found = None
+    # Получаем заказы из базы
+    orders = get_all_orders()  # ✅ Загружаем все заказы
+    print(f"📦 Все заказы из базы: {orders}")  # Логируем заказы
 
-    # Ищем заказ среди всех пользователей
-    for user_id, orders in user_orders.items():
-        for order in orders:
-            if str(order["id"]) == str(order_id):
-                order_found = order
-                user_id_found = user_id
-                break
-        if order_found:
-            break
+    # 🛠 Теперь ищем по `id`, а не по `car_id`
+    order_found = next(
+        (order for order in orders if str(order["id"]) == str(order_id)), None
+    )
 
     if not order_found:
         print(f"❌ Ошибка: заказ {order_id} не найден!")
         bot.answer_callback_query(call.id, "❌ Ошибка: заказ не найден.")
         return
 
-    # 🔥 Генерируем короткие callback_data (код статуса вместо строки)
+    user_id = order_found["user_id"]
+    car_id = order_found["car_id"]  # ✅ Берём car_id
+
+    # 🔥 Генерируем кнопки статусов
     keyboard = types.InlineKeyboardMarkup()
     for status_code, status_text in ORDER_STATUSES.items():
         keyboard.add(
             types.InlineKeyboardButton(
                 status_text,
-                callback_data=f"set_status_{user_id_found}_{order_id}_{status_code}",
+                callback_data=f"set_status_{user_id}_{order_id}_{status_code}",
             )
         )
 
@@ -419,28 +438,19 @@ def set_new_status(call):
 
     print(f"🔄 Получен `callback_data`: {call.data}")  # Логирование данных
 
-    # Разбиваем callback_data на 5 частей (берём 4 после "set_status")
-    data_parts = call.data.split("_", 4)
-
-    if len(data_parts) < 5:
-        print(
-            f"❌ Ошибка: callback_data имеет некорректный формат: {data_parts}"
-        )  # Лог
-        bot.answer_callback_query(call.id, "❌ Ошибка: неверный формат данных.")
-        return
-
-    _, _, user_id, order_id, status_code = data_parts  # Теперь корректное разбиение
+    # Разбиваем callback_data
+    _, _, user_id, order_id, status_code = call.data.split("_", 4)
 
     if not user_id.isdigit():
-        print(f"❌ Ошибка: user_id некорректный: {user_id}")  # Лог
+        print(f"❌ Ошибка: user_id некорректный: {user_id}")
         bot.answer_callback_query(call.id, "❌ Ошибка: неверный ID пользователя.")
         return
 
     user_id = int(user_id)
 
-    # Проверяем, существует ли этот код статуса
+    # Проверяем статус
     if status_code not in ORDER_STATUSES:
-        print(f"❌ Ошибка: неверный код статуса: {status_code}")  # Лог
+        print(f"❌ Ошибка: неверный код статуса: {status_code}")
         bot.answer_callback_query(call.id, "❌ Ошибка: неверный статус.")
         return
 
@@ -448,27 +458,24 @@ def set_new_status(call):
 
     print(
         f"🔄 Менеджер {manager_id} меняет статус заказа {order_id} для {user_id} на {new_status}"
-    )  # Логирование
+    )
 
-    # Проверяем, существует ли заказ у пользователя
-    if user_id not in user_orders:
-        print(f"❌ Ошибка: у пользователя {user_id} нет заказов!")  # Лог
-        bot.answer_callback_query(call.id, "❌ Ошибка: у пользователя нет заказов.")
-        return
+    # Получаем все заказы
+    orders = get_all_orders()
+    print(f"📦 Все заказы пользователя {user_id}: {orders}")  # Логируем
 
-    order_found = None
-    for order in user_orders[user_id]:
-        if str(order["id"]) == str(order_id):  # Приводим к строке для сравнения
-            order_found = order
-            break
+    # 🛠 Ищем заказ по `id`
+    order_found = next(
+        (order for order in orders if str(order["id"]) == str(order_id)), None
+    )
 
     if not order_found:
-        print(f"❌ Ошибка: заказ {order_id} не найден!")  # Лог
+        print(f"❌ Ошибка: заказ {order_id} не найден!")
         bot.answer_callback_query(call.id, "❌ Ошибка: заказ не найден.")
         return
 
-    # Обновляем статус
-    order_found["status"] = new_status
+    # Обновляем статус заказа в БД
+    update_order_status_in_db(order_id, new_status)
 
     # Уведомляем клиента
     bot.send_message(
@@ -479,13 +486,10 @@ def set_new_status(call):
         parse_mode="Markdown",
     )
 
-    # Подтверждение менеджеру
+    # Подтверждаем менеджеру
     bot.answer_callback_query(call.id, f"✅ Статус обновлён на {new_status}!")
 
-    # Автоархивация завершённых заказов
-    archive_completed_orders()
-
-    # Обновляем список заказов у менеджеров
+    # Обновляем заказы у менеджеров
     show_orders(call.message)
 
 
@@ -2219,7 +2223,7 @@ def handle_message(message):
 
 # Run the bot
 if __name__ == "__main__":
-    # initialize_db()
+    create_tables()
     set_bot_commands()
     get_rub_to_krw_rate()
     get_currency_rates()
