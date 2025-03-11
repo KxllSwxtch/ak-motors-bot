@@ -72,7 +72,7 @@ pending_orders = {}
 user_contacts = {}
 user_names = {}
 
-MANAGERS = [728438182]
+MANAGERS = [728438182, 642176871]
 
 ORDER_STATUSES = {
     "1": "🚗 Авто выкуплен (на базе)",
