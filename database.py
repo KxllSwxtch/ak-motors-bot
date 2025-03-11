@@ -31,6 +31,7 @@ def create_tables():
                     engine_volume INT,
                     transmission TEXT,
                     user_name TEXT,
+                    full_name TEXT,
                     phone_number TEXT,
                     images TEXT[],
                     status TEXT DEFAULT '🔄 Не заказано',
@@ -85,7 +86,7 @@ def get_orders(user_id):
     cur.execute(
         """
         SELECT id, car_id, title, status, link, year, month, mileage, engine_volume, transmission,
-               total_cost_usd, total_cost_krw, total_cost_rub
+               total_cost_usd, total_cost_krw, total_cost_rub, user_name, full_name
         FROM orders
         WHERE user_id = %s
     """,
@@ -112,6 +113,8 @@ def get_orders(user_id):
             "total_cost_usd": order[10],
             "total_cost_krw": order[11],
             "total_cost_rub": order[12],
+            "user_name": order[13],
+            "full_name": order[14],  # ✅ ФИО клиента теперь загружается
         }
         for order in orders
     ]
@@ -120,38 +123,20 @@ def get_orders(user_id):
 def get_all_orders():
     """Получает список всех заказов для менеджеров"""
     with connect_db() as conn:
-        with conn.cursor() as cur:
+        with conn.cursor(
+            cursor_factory=RealDictCursor
+        ) as cur:  # ✅ Добавили `RealDictCursor`
             cur.execute(
                 """
                 SELECT id, car_id, user_id, user_name, phone_number, title, status, link, 
                        year, month, mileage, engine_volume, transmission, 
-                       total_cost_usd, total_cost_krw, total_cost_rub
+                       total_cost_usd, total_cost_krw, total_cost_rub, full_name
                 FROM orders
             """
             )
             orders = cur.fetchall()
 
-    return [
-        {
-            "id": order["id"],  # ❗️ ID заказа в БД
-            "car_id": order["car_id"],  # ✅ Теперь возвращаем car_id
-            "user_id": order["user_id"],
-            "user_name": order["user_name"],
-            "phone_number": order["phone_number"],
-            "title": order["title"],
-            "status": order["status"],
-            "link": order["link"],
-            "year": order["year"],
-            "month": order["month"],
-            "mileage": order["mileage"],
-            "engine_volume": order["engine_volume"],
-            "transmission": order["transmission"],
-            "total_cost_usd": order["total_cost_usd"],
-            "total_cost_krw": order["total_cost_krw"],
-            "total_cost_rub": order["total_cost_rub"],
-        }
-        for order in orders
-    ]
+    return orders  # Теперь `orders` — список словарей, а не кортежей!
 
 
 def update_order_status_in_db(order_id, new_status):
@@ -165,12 +150,32 @@ def update_order_status_in_db(order_id, new_status):
             conn.commit()
 
 
-def update_user_phone(user_id, phone_number, order_id):
+def update_user_phone(user_id, phone_number, car_id):
     """Обновляет номер телефона в конкретном заказе пользователя."""
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE orders SET phone_number = %s WHERE user_id = %s AND id = %s;",  # ✅ Обновляем только один заказ
-                (phone_number, user_id, order_id),
+                "UPDATE orders SET phone_number = %s WHERE user_id = %s AND car_id = %s;",  # ✅ Обновляем только один заказ
+                (phone_number, user_id, str(car_id)),
+            )
+            conn.commit()
+
+
+def delete_order_from_db(order_id):
+    """Удаляет заказ из базы данных по order_id"""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM orders WHERE id = %s;", (order_id,))
+            conn.commit()
+    print(f"✅ Заказ {order_id} удалён из базы!")
+
+
+def update_user_name(user_id, full_name):
+    """Обновляет ФИО пользователя в базе данных."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET user_name = %s WHERE user_id = %s;",
+                (full_name, user_id),
             )
             conn.commit()
