@@ -42,7 +42,7 @@ CHANNEL_USERNAME = "akmotors96"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 load_dotenv()
-bot_token = os.get_env("BOT_TOKEN")
+bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
 
 # Set locale for number formatting
