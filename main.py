@@ -618,8 +618,6 @@ def delete_order(call):
     bot.answer_callback_query(call.id, "✅ Заказ удалён!")
     bot.send_message(manager_id, f"🗑 Заказ {order_id} успешно удалён.")
 
-    updated_orders = get_all_orders()
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("set_status_"))
 def set_new_status(call):
@@ -833,7 +831,7 @@ def get_usd_to_krw_rate():
         data = response.json()
 
         # Получаем курс и добавляем +25 KRW
-        usd_to_krw = data[0]["rate"] + 25
+        usd_to_krw = data[0]["rate"] + 10
         usd_to_krw_rate = usd_to_krw
 
         print(f"Курс USD → KRW (с учетом +25 KRW): {usd_to_krw_rate}")
