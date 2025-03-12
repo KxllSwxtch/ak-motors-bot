@@ -227,3 +227,30 @@ def reset_calculation_count(user_id):
                 "UPDATE calculations SET count = 0 WHERE user_id = %s;", (user_id,)
             )
             conn.commit()
+
+
+def update_user_subscription(user_id, status):
+    """Обновляет статус подписки пользователя."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO subscriptions (user_id, status)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id) DO UPDATE 
+                SET status = EXCLUDED.status;
+                """,
+                (user_id, status),
+            )
+            conn.commit()
+
+
+def check_user_subscription(user_id):
+    """Проверяет, подписан ли пользователь."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status FROM subscriptions WHERE user_id = %s;", (user_id,)
+            )
+            result = cur.fetchone()
+            return result["status"] if result else False

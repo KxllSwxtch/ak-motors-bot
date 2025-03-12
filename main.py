@@ -19,6 +19,8 @@ from database import (
     update_user_name,
     get_calculation_count,
     increment_calculation_count,
+    check_user_subscription,
+    update_user_subscription,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -40,7 +42,7 @@ CHANNEL_USERNAME = "akmotors96"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 load_dotenv()
-bot_token = os.getenv(BOT_TOKEN)
+bot_token = os.get_env("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
 
 # Set locale for number formatting
@@ -750,6 +752,24 @@ def place_order(call):
 ################## КОД ДЛЯ СТАТУСОВ
 
 
+@bot.callback_query_handler(func=lambda call: call.data == "check_subscription")
+def check_subscription(call):
+    user_id = call.from_user.id
+    chat_member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
+
+    if chat_member.status in ["member", "administrator", "creator"]:
+        bot.answer_callback_query(
+            call.id, "✅ Подписка оформлена! Вы можете продолжить расчёты."
+        )
+        # Установить подписку для пользователя в БД
+        update_user_subscription(user_id, True)
+    else:
+        bot.answer_callback_query(
+            call.id,
+            "🚫 Вы не подписались на канал! Оформите подписку, чтобы продолжить.",
+        )
+
+
 def is_user_subscribed(user_id):
     """Проверяет, подписан ли пользователь на канал."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember?chat_id={CHANNEL_USERNAME}&user_id={user_id}"
@@ -1249,13 +1269,17 @@ def calculate_cost(link, message):
     user_calc_count = get_calculation_count(user_id)
     user_subscription = is_user_subscribed(user_id)
 
-    if user_calc_count >= 3 and not user_subscription:
+    if user_calc_count >= 2 and not user_subscription:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
             types.InlineKeyboardButton(
-                "🚀 Оформить подписку", url="https://t.me/yourbot"
+                "🚀 Оформить подписку", url=f"https://t.me/{CHANNEL_USERNAME}"
             )
         )
+        keyboard.add(
+            types.InlineKeyboardButton("✅ Готово", callback_data="check_subscription")
+        )
+
         bot.send_message(
             message.chat.id,
             "🚫 У вас закончились бесплатные расчёты. Чтобы продолжить, оформите подписку.",
