@@ -620,14 +620,6 @@ def delete_order(call):
 
     updated_orders = get_all_orders()
 
-    if updated_orders:
-        orders_text = "📋 Текущие заказы:\n\n"
-        for order in updated_orders:
-            orders_text += f"🚗 {order['id']}: {order['description']}\n"
-        bot.send_message(manager_id, orders_text)
-    else:
-        bot.send_message(manager_id, "📭 Активных заказов нет.")
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("set_status_"))
 def set_new_status(call):
