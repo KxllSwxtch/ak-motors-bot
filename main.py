@@ -1322,7 +1322,7 @@ def calculate_cost(link, message):
             send_error_message(message, "🚫 Не удалось извлечь carSeq из ссылки.")
             return
 
-    elif "web.chutcha.net" in link:
+    elif "web.chutcha.net" in link or "chutcha" in link:
         parsed_url = urlparse(link)
         path_parts = parsed_url.path.split("/")
 
@@ -2376,7 +2376,7 @@ def handle_message(message):
     if user_message == CALCULATE_CAR_TEXT:
         bot.send_message(
             message.chat.id,
-            "Пожалуйста, введите ссылку на автомобиль с одного из сайтов (encar.com, kbchachacha.com, web.chutcha.net):",
+            "Пожалуйста, введите ссылку на автомобиль с одного из сайтов (encar.com, kbchachacha.com, chutcha.net):",
         )
 
     elif user_message == "Ручной расчёт":
