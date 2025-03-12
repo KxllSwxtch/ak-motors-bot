@@ -757,7 +757,6 @@ def print_message(message):
 def set_bot_commands():
     commands = [
         types.BotCommand("start", "Запустить бота"),
-        types.BotCommand("main_menu", "Главное меню"),
         types.BotCommand("exchange_rates", "Курсы валют"),
         types.BotCommand("my_cars", "Мои избранные автомобили"),
         types.BotCommand("orders", "Список заказов (Для менеджеров)"),
@@ -919,7 +918,7 @@ def main_menu():
 
 
 # Start command handler
-@bot.message_handler(commands=["start", "main_menu"])
+@bot.message_handler(commands=["start"])
 def send_welcome(message):
     get_currency_rates()
 
