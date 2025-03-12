@@ -899,7 +899,6 @@ def cbr_command(message):
 
 
 # Main menu creation function
-@bot.message_handler(commands=["main_menu"])
 def main_menu():
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     keyboard.add(
@@ -920,7 +919,7 @@ def main_menu():
 
 
 # Start command handler
-@bot.message_handler(commands=["start"])
+@bot.message_handler(commands=["start", "main_menu"])
 def send_welcome(message):
     get_currency_rates()
 
@@ -1804,112 +1803,110 @@ def get_technical_card():
             "Connection": "keep-alive",
         }
 
-        response = requests.get(url, headers)
-        json_response = response.json()
+        response = requests.get(url, headers=headers)
+        json_response = response.json() if response.status_code == 200 else None
 
-        # Основная информация
-        model_year = (
-            json_response.get("master", {})
-            .get("detail", {})
-            .get("modelYear", "Не указано")
-        )
-        first_registration_date = (
-            json_response.get("master", {})
-            .get("detail", {})
-            .get("firstRegistrationDate", "Не указано")
-        )
-        comments = json_response.get("master", {}).get("detail", {}).get("comments")
-        comments = comments.strip() if comments else "Нет данных"
+        if not json_response:
+            return "❌ Ошибка: не удалось получить данные. Проверьте ссылку."
 
-        usage_change_types = (
-            json_response.get("master", {})
-            .get("detail", {})
-            .get("usageChangeTypes", [])
-        )
-        paint_part_types = (
-            json_response.get("master", {}).get("detail", {}).get("paintPartTypes", [])
-        )
-        serious_types = (
-            json_response.get("master", {}).get("detail", {}).get("seriousTypes", [])
-        )
-        tuning_state_types = (
-            json_response.get("master", {})
-            .get("detail", {})
-            .get("tuningStateTypes", [])
-        )
-        etcs = json_response.get("etcs", [])
+        master = json_response.get("master", {}).get("detail", {})
+        if not master:
+            return "❌ Ошибка: данные о транспортном средстве не найдены."
 
-        # Перевод использования
-        usage_translation = {
-            "렌트": "Аренда",
-            "리스": "Лизинг",
-            "영업용": "Коммерческое использование",
+        vehicle_id = json_response.get("vehicleId", "Не указано")
+        model_year = master.get("modelYear", "Не указано").strip()
+        vin = master.get("vin", "Не указано")
+        first_registration_date = master.get("firstRegistrationDate", "Не указано")
+        registration_date = master.get("registrationDate", "Не указано")
+        mileage = f"{int(master.get('mileage', 0)):,}".replace(",", " ") + " км"
+        transmission = master.get("transmissionType", {}).get("title", "Не указано")
+        motor_type = master.get("motorType", "Не указано")
+        color = master.get("colorType", {}).get("title", "Не указано")
+        accident = "❌ Нет" if not master.get("accdient", False) else "⚠️ Да"
+        simple_repair = "❌ Нет" if not master.get("simpleRepair", False) else "⚠️ Да"
+        waterlog = "❌ Нет" if not master.get("waterlog", False) else "⚠️ Да"
+        tuning = "❌ Нет" if not master.get("tuning", False) else "⚠️ Да"
+        car_state = master.get("carStateType", {}).get("title", "Не указано")
+
+        # Переводы
+        translations = {
+            "오토": "Автоматическая",
+            "수동": "Механическая",
+            "자가보증": "Собственная гарантия",
+            "양호": "Хорошее состояние",
+            "무채색": "Нейтральный",
+            "적정": "В норме",
+            "없음": "Нет",
+            "누유": "Утечка",
+            "불량": "Неисправность",
+            "미세누유": "Незначительная утечка",
+            "양호": "В хорошем состоянии",
+            "주의": "Требует внимания",
+            "교환": "Замена",
+            "부족": "Недостаточный уровень",
+            "정상": "Нормально",
+            "작동불량": "Неисправна",
+            "소음": "Шум",
+            "작동양호": "Работает хорошо",
         }
-        usage_change = "Не указано"
-        if usage_change_types:
-            usage_change = usage_translation.get(
-                usage_change_types[0].get("title", ""), "Не указано"
-            )
 
-        # Необходимость ремонта
-        repair_needed = []
-        for etc in etcs:
-            title = etc["type"]["title"]
-            if title == "수리필요":
-                for child in etc["children"]:
-                    repair_needed.append(child["type"]["title"])
+        def translate(value):
+            return translations.get(value, value)
 
-        repair_translation = {
-            "외장": "Кузов",
-            "내장": "Интерьер",
-            "광택": "Полировка",
-            "룸 클리링": "Чистка салона",
-            "휠": "Колёса",
-            "타이어": "Шины",
-            "유리": "Стекло",
-        }
-        repair_needed_translated = [
-            repair_translation.get(item, item) for item in repair_needed
-        ]
-        repair_output = (
-            "Нет данных"
-            if not repair_needed_translated
-            else "\n".join(
-                [f"- {item}: Требуется ремонт" for item in repair_needed_translated]
-            )
-        )
+        # Проверка состояния узлов
+        inners = json_response.get("inners", [])
+        nodes_status = {}
 
-        # Окрашенные элементы
-        painted_parts = (
-            "Нет данных" if not paint_part_types else "\n".join(paint_part_types)
-        )
+        for inner in inners:
+            for child in inner.get("children", []):
+                type_code = child.get("type", {}).get("code", "")
+                status_type = child.get("statusType")
+                status = (
+                    translate(status_type.get("title", "Не указано"))
+                    if status_type
+                    else "Не указано"
+                )
 
-        # Серьёзные повреждения
-        serious_damages = (
-            "Нет данных" if not serious_types else "\n".join(serious_types)
-        )
+                nodes_status[type_code] = status
 
-        # Тюнинг и модификации
-        tuning_mods = (
-            "Нет данных" if not tuning_state_types else "\n".join(tuning_state_types)
-        )
-
-        # Сборка сообщения
         output = (
-            f"🚗 <b>Технический отчёт об автомобиле</b> 🚗\n\n"
-            f"🛠 <b>Обновление тех. состояния</b>: {model_year}\n\n"
-            f"🔧 <b>Использование автомобиля</b>: {usage_change}\n\n"
-            f"⚙️ <b>Необходимость ремонта</b>:\n{repair_output}\n\n"
-            f"🎨 <b>Окрашенные элементы</b>:\n{painted_parts}\n\n"
-            f"🚧 <b>Серьёзные повреждения</b>:\n{serious_damages}\n\n"
-            f"🔧 <b>Тюнинг и модификации</b>:\n{tuning_mods}"
+            f"🚗 <b>Основная информация об автомобиле</b>\n"
+            f"	•	ID автомобиля: {vehicle_id}\n"
+            f"	•	Год выпуска: {model_year}\n"
+            f"	•	Дата первой регистрации: {first_registration_date}\n"
+            f"	•	Дата регистрации в системе: {registration_date}\n"
+            f"	•	VIN: {vin}\n"
+            f"	•	Пробег: {mileage}\n"
+            f"	•	Тип трансмиссии: {translate(transmission)} ({transmission})\n"
+            f"	•	Тип двигателя: {motor_type}\n"
+            f"	•	Состояние автомобиля: {translate(car_state)} ({car_state})\n"
+            f"	•	Цвет: {translate(color)} ({color})\n"
+            f"	•	Тюнинг: {tuning}\n"
+            f"	•	Автомобиль попадал в ДТП: {accident}\n"
+            f"	•	Были ли простые ремонты: {simple_repair}\n"
+            f"	•	Затопление: {waterlog}\n"
+            f"\n⸻\n\n"
+            f"⚙️ <b>Проверка основных узлов</b>\n"
+            f"	•	Двигатель: ✅ {nodes_status.get('s001', 'Не указано')}\n"
+            f"	•	Трансмиссия: ✅ {nodes_status.get('s002', 'Не указано')}\n"
+            f"	•	Работа двигателя на холостом ходу: ✅ {nodes_status.get('s003', 'Не указано')}\n"
+            f"	•	Утечка масла двигателя: {'❌ Нет' if nodes_status.get('s004', '없음') == 'Нет' else '⚠️ Да'} ({nodes_status.get('s004', 'Не указано')})\n"
+            f"	•	Уровень масла в двигателе: ✅ {nodes_status.get('s005', 'Не указано')}\n"
+            f"	•	Утечка охлаждающей жидкости: {'❌ Нет' if nodes_status.get('s006', '없음') == 'Нет' else '⚠️ Да'} ({nodes_status.get('s006', 'Не указано')})\n"
+            f"	•	Уровень охлаждающей жидкости: ✅ {nodes_status.get('s007', 'Не указано')}\n"
+            f"	•	Система подачи топлива: ✅ {nodes_status.get('s008', 'Не указано')}\n"
+            f"	•	Автоматическая коробка передач: ✅ {nodes_status.get('s009', 'Не указано')}\n"
+            f"	•	Утечка масла в АКПП: {'❌ Нет' if nodes_status.get('s010', '없음') == 'Нет' else '⚠️ Да'} ({nodes_status.get('s010', 'Не указано')})\n"
+            f"	•	Работа АКПП на холостом ходу: ✅ {nodes_status.get('s011', 'Не указано')}\n"
+            f"	•	Система сцепления: ✅ {nodes_status.get('s012', 'Не указано')}\n"
+            f"	•	Карданный вал и подшипники: ✅ {nodes_status.get('s013', 'Не указано')}\n"
+            f"	•	Редуктор: ✅ {nodes_status.get('s014', 'Не указано')}\n"
         )
 
         return output
 
-    except Exception as e:
-        print(f"Произошла ошибка при получении данных: {e}")
-        return "Произошла ошибка при получении данных"
+    except requests.RequestException as e:
+        return f"❌ Ошибка при получении данных: {e}"
 
 
 # Callback query handler
@@ -2425,7 +2422,7 @@ def handle_message(message):
 if __name__ == "__main__":
     create_tables()
     set_bot_commands()
-    get_rub_to_krw_rate()
     get_currency_rates()
+    get_rub_to_krw_rate()
     get_usdt_to_krw_rate()
     bot.polling(non_stop=True)
