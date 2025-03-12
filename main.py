@@ -173,7 +173,10 @@ def show_favorite_cars(message):
             f"Стоимость авто под ключ:\n"
             f"${format_number(total_cost_usd)} | ₩{format_number(total_cost_krw)} | {format_number(total_cost_rub)} ₽\n\n"
             f"📌 *Статус:* {car_status}\n\n"
-            f"[🔗 Ссылка на автомобиль]({car_link})"
+            f"[🔗 Ссылка на автомобиль]({car_link})\n\n"
+            f"Консультация с менеджерами:\n\n"
+            f"+82-10-2934-8855 (Артур)\n"
+            f"@timyo97 (Тимур)\n\n"
         )
 
         # Создаём клавиатуру
@@ -230,7 +233,7 @@ def notify_managers(order):
         f"🚨 *Новый заказ!*\n\n"
         f"🚗 [{order_title}]({order_link})\n"
         f"👤 Заказчик: {user_mention}\n"
-        f"📞 Контакт: {phone_number}\n"
+        f"📞 Контакт: +{phone_number}\n"
         f"📌 *Статус:* 🕒 Ожидает подтверждения\n"
     )
 
@@ -527,15 +530,18 @@ def show_orders(message):
         car_link = order.get("link", "#")
         car_id = order.get("car_id", "Неизвестно")
 
+        if car_status == "🔄 Не заказано":
+            car_status = "🕒 Ожидает подтверждения"
+
         user_mention = (
             f"[{user_name}](tg://user?id={user_id})" if user_id else user_name
         )
 
         response_text = (
-            f"📦 *Заказ #{idx}*\n"
+            # f"📦 *Заказ #{idx}*\n"
             f"🚗 *{car_title}* (ID: {car_id})\n\n"
             f"👤 Заказчик: {user_mention}\n"
-            f"📞 Телефон: {phone_number}\n"
+            f"📞 Телефон: *+{phone_number}*\n\n"
             f"📌 *Статус:* {car_status}\n\n"
             f"[🔗 Ссылка на автомобиль]({car_link})"
         )
@@ -570,7 +576,7 @@ def update_order_status(call):
 
     # Получаем заказы из базы
     orders = get_all_orders()  # ✅ Загружаем все заказы
-    print(f"📦 Все заказы из базы: {orders}")  # Логируем заказы
+    # print(f"📦 Все заказы из базы: {orders}")  # Логируем заказы
 
     # 🛠 Теперь ищем по `id`, а не по `car_id`
     order_found = next(
@@ -611,6 +617,16 @@ def delete_order(call):
     bot.answer_callback_query(call.id, "✅ Заказ удалён!")
     bot.send_message(manager_id, f"🗑 Заказ {order_id} успешно удалён.")
 
+    updated_orders = get_all_orders()
+
+    if updated_orders:
+        orders_text = "📋 Текущие заказы:\n\n"
+        for order in updated_orders:
+            orders_text += f"🚗 {order['id']}: {order['description']}\n"
+        bot.send_message(manager_id, orders_text)
+    else:
+        bot.send_message(manager_id, "📭 Активных заказов нет.")
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("set_status_"))
 def set_new_status(call):
@@ -642,7 +658,7 @@ def set_new_status(call):
 
     # Получаем все заказы
     orders = get_all_orders()
-    print(f"📦 Все заказы пользователя {user_id}: {orders}")  # Логируем
+    # print(f"📦 Все заказы пользователя {user_id}: {orders}")  # Логируем
 
     # 🛠 Ищем заказ по `id`
     order_found = next(
@@ -662,7 +678,7 @@ def set_new_status(call):
         user_id,
         f"📢 *Обновление статуса заказа!*\n\n"
         f"🚗 [{order_found['title']}]({order_found['link']})\n"
-        f"📌 Новый статус: *{new_status}*",
+        f"📌 Новый статус:\n*{new_status}*",
         parse_mode="Markdown",
     )
 
@@ -1632,8 +1648,8 @@ def calculate_cost(link, message):
             f"💵 <b>Курс USDT к Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
-            f"▪️ +82 10-2934-8855 (Артур)\n"
-            f"▪️ +82 10-5528-0997 (Тимур)\n"
+            f"▪️ +82-10-2934-8855 (Артур)\n"
+            f"▪️ +82-10-5528-0997 (Тимур)\n"
             # f"▪️ +82 10-5128-8082 (Александр) \n\n"
             "🔗 <a href='https://t.me/akmotors96'>Официальный телеграм канал</a>\n"
         )
@@ -1919,8 +1935,8 @@ def handle_callback_query(call):
             f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
             f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-            f"▪️ +82 10-2934-8855 (Артур)\n"
-            f"▪️ +82 10-5528-0997 (Тимур)\n"
+            f"▪️ +82-10-2934-8855 (Артур)\n"
+            f"▪️ +82-10-5528-0997 (Тимур)\n"
             # f"▪️ +82 10-5128-8082 (Александр)\n\n"
         )
 
@@ -2269,8 +2285,8 @@ def process_car_price(message):
         f"Автовоз до Москвы:\n<b>${format_number(moscow_transporter_usd)}</b> | <b>₩{format_number(moscow_transporter_krw)}</b> | <b>{format_number(moscow_transporter_rub)} ₽</b>\n\n"
         f"Итого под ключ: \n<b>${format_number(total_cost_usd)}</b> | <b>₩{format_number(total_cost_krw)}</b> | <b>{format_number(total_cost_rub)} ₽</b>\n\n"
         f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-        f"▪️ +82 10-2934-8855 (Артур)\n"
-        f"▪️ +82 10-5528-0997 (Тимур)\n"
+        f"▪️ +82-10-2934-8855 (Артур)\n"
+        f"▪️ +82-10-5528-0997 (Тимур)\n"
         # f"▪️ +82 10-5128-8082 (Александр)\n\n"
     )
 
