@@ -16,6 +16,9 @@ from database import (
     update_order_status_in_db,
     delete_order_from_db,
     update_user_name,
+    update_user_name,
+    get_calculation_count,
+    increment_calculation_count,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -33,9 +36,11 @@ from utils import (
 )
 
 CALCULATE_CAR_TEXT = "Рассчитать Автомобиль (Encar, KBChaCha, ChutCha)"
+CHANNEL_USERNAME = "akmotors96"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 load_dotenv()
-bot_token = os.getenv("BOT_TOKEN")
+bot_token = os.getenv(BOT_TOKEN)
 bot = telebot.TeleBot(bot_token)
 
 # Set locale for number formatting
@@ -73,6 +78,14 @@ user_contacts = {}
 user_names = {}
 
 MANAGERS = [728438182, 642176871, 8039170978]
+FREE_ACCESS_USERS = {
+    1759578050,
+    7914145866,
+    627689711,
+    8039170978,  # Артур
+    642176871,  # Тимур
+    728438182,  # Дима
+}
 
 ORDER_STATUSES = {
     "1": "🚗 Авто выкуплен (на базе)",
@@ -714,27 +727,38 @@ def place_order(call):
     bot.answer_callback_query(call.id, "✅ Заказ отправлен менеджерам!")
 
 
-def archive_completed_orders():
-    global user_orders
-    completed_orders = []
+# def archive_completed_orders():
+#     global user_orders
+#     completed_orders = []
 
-    # Проверяем все заказы всех пользователей
-    for user_id, orders in user_orders.items():
-        for order in orders:
-            if (
-                order["status"] == "🚛 Доставляется клиенту"
-            ):  # ✅ Проверяем как элемент списка
-                completed_orders.append(order)
+#     # Проверяем все заказы всех пользователей
+#     for user_id, orders in user_orders.items():
+#         for order in orders:
+#             if (
+#                 order["status"] == "🚛 Доставляется клиенту"
+#             ):  # ✅ Проверяем как элемент списка
+#                 completed_orders.append(order)
 
-        # Убираем завершённые заказы из активных
-        user_orders[user_id] = [
-            order for order in orders if order["status"] != "🚛 Доставляется клиенту"
-        ]
+#         # Убираем завершённые заказы из активных
+#         user_orders[user_id] = [
+#             order for order in orders if order["status"] != "🚛 Доставляется клиенту"
+#         ]
 
-    print(f"📦 Архивировано {len(completed_orders)} заказов")  # Логирование
+#     print(f"📦 Архивировано {len(completed_orders)} заказов")  # Логирование
 
 
 ################## КОД ДЛЯ СТАТУСОВ
+
+
+def is_user_subscribed(user_id):
+    """Проверяет, подписан ли пользователь на канал."""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember?chat_id={CHANNEL_USERNAME}&user_id={user_id}"
+    response = requests.get(url).json()
+    return response.get("ok") and response.get("result", {}).get("status") in [
+        "member",
+        "administrator",
+        "creator",
+    ]
 
 
 def print_message(message):
@@ -775,11 +799,11 @@ def get_usdt_to_krw_rate():
 
     # Извлечение курса KRW
     krw_rate = data["data"]["rates"]["KRW"]
-    usdt_to_krw_rate = float(krw_rate) + 4
+    usdt_to_krw_rate = float(krw_rate)
 
     print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
 
-    return float(krw_rate) + 4
+    return float(krw_rate) + 8
 
 
 def get_rub_to_krw_rate():
@@ -1219,6 +1243,29 @@ def get_car_info(url):
 def calculate_cost(link, message):
     global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
 
+    user_id = message.chat.id
+
+    # Проверяем количество расчетов
+    user_calc_count = get_calculation_count(user_id)
+    user_subscription = is_user_subscribed(user_id)
+
+    if user_calc_count >= 3 and not user_subscription:
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton(
+                "🚀 Оформить подписку", url="https://t.me/yourbot"
+            )
+        )
+        bot.send_message(
+            message.chat.id,
+            "🚫 У вас закончились бесплатные расчёты. Чтобы продолжить, оформите подписку.",
+            reply_markup=keyboard,
+        )
+        return
+
+    # Увеличиваем счётчик расчётов
+    increment_calculation_count(user_id)
+
     print_message("ЗАПРОС НА РАСЧЁТ АВТОМОБИЛЯ")
 
     # Отправляем сообщение и сохраняем его ID
@@ -1358,9 +1405,7 @@ def calculate_cost(link, message):
     if not car_price and car_engine_displacement and formatted_car_date:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
-            types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me/@timyo97"
-            )
+            types.InlineKeyboardButton("Написать менеджеру", url="https://t.me/timyo97")
         )
         keyboard.add(
             types.InlineKeyboardButton(
@@ -1670,9 +1715,7 @@ def calculate_cost(link, message):
                 )
             )
         keyboard.add(
-            types.InlineKeyboardButton(
-                "Написать менеджеру", url="https://t.me/@timyo97"
-            )
+            types.InlineKeyboardButton("Написать менеджеру", url="https://t.me/timyo97")
         )
         keyboard.add(
             types.InlineKeyboardButton(
@@ -1978,7 +2021,7 @@ def handle_callback_query(call):
         )
         # keyboard.add(
         #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/@timyo97"
+        #         "Связаться с менеджером", url="https://t.me/timyo97"
         #     )
         # )
 
@@ -2022,7 +2065,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/@timyo97"
+                    "Связаться с менеджером", url="https://t.me/timyo97"
                 )
             )
 
@@ -2058,7 +2101,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/@timyo97"
+                    "Связаться с менеджером", url="https://t.me/timyo97"
                 )
             )
             keyboard.add(
@@ -2285,9 +2328,7 @@ def process_car_price(message):
         )
     )
     keyboard.add(
-        types.InlineKeyboardButton(
-            "Связаться с менеджером", url="https://t.me/@timyo97"
-        )
+        types.InlineKeyboardButton("Связаться с менеджером", url="https://t.me/timyo97")
     )
     keyboard.add(types.InlineKeyboardButton("Главное меню", callback_data="main_menu"))
 
@@ -2410,7 +2451,7 @@ def handle_message(message):
 
 # Run the bot
 if __name__ == "__main__":
-    create_tables()
+    # create_tables()
     set_bot_commands()
     get_currency_rates()
     get_rub_to_krw_rate()

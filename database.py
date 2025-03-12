@@ -41,6 +41,17 @@ def create_tables():
                 );
             """
             )
+
+            # ✅ Добавляем таблицу расчётов
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS calculations (
+                    user_id BIGINT PRIMARY KEY,
+                    count INT DEFAULT 0
+                );
+            """
+            )
+
             conn.commit()
 
 
@@ -177,5 +188,42 @@ def update_user_name(user_id, full_name):
             cur.execute(
                 "UPDATE orders SET user_name = %s WHERE user_id = %s;",
                 (full_name, user_id),
+            )
+            conn.commit()
+
+
+def get_calculation_count(user_id):
+    """Получает количество расчётов пользователя."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count FROM calculations WHERE user_id = %s;", (user_id,)
+            )
+            result = cur.fetchone()
+            return result["count"] if result else 0
+
+
+def increment_calculation_count(user_id):
+    """Увеличивает количество расчётов пользователя."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO calculations (user_id, count)
+                VALUES (%s, 1)
+                ON CONFLICT (user_id) DO UPDATE 
+                SET count = calculations.count + 1;
+                """,
+                (user_id,),
+            )
+            conn.commit()
+
+
+def reset_calculation_count(user_id):
+    """Сбрасывает количество расчётов (например, после подписки)."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE calculations SET count = 0 WHERE user_id = %s;", (user_id,)
             )
             conn.commit()
