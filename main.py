@@ -212,6 +212,11 @@ def show_favorite_cars(message):
             )
         keyboard.add(
             types.InlineKeyboardButton(
+                "❌ Удалить авто из списка", callback_data=f"delete_order_{car_id}"
+            )
+        )
+        keyboard.add(
+            types.InlineKeyboardButton(
                 "Вернуться в главное меню", callback_data="main_menu"
             )
         )
