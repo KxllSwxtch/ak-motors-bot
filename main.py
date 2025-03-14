@@ -22,6 +22,7 @@ from database import (
     increment_calculation_count,
     check_user_subscription,
     update_user_subscription,
+    delete_favorite_car,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -212,7 +213,7 @@ def show_favorite_cars(message):
             )
         keyboard.add(
             types.InlineKeyboardButton(
-                "❌ Удалить авто из списка", callback_data=f"delete_order_{car_id}"
+                "❌ Удалить авто из списка", callback_data=f"delete_car_{car_id}"
             )
         )
         keyboard.add(
@@ -635,6 +636,19 @@ def update_order_status(call):
         )
 
     bot.send_message(manager_id, "📌 Выберите новый статус:", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("delete_car_"))
+def delete_favorite_callback(call):
+    user_id = call.message.chat.id
+    car_id = call.data.split("_")[2]  # Получаем ID авто
+
+    delete_favorite_car(user_id, car_id)  # Удаляем авто из БД
+
+    bot.answer_callback_query(call.id, "✅ Авто удалено из списка!")
+    bot.delete_message(
+        call.message.chat.id, call.message.message_id
+    )  # Удаляем сообщение с авто
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("delete_order_"))

@@ -264,3 +264,14 @@ def check_user_subscription(user_id):
             )
             result = cur.fetchone()
             return result["status"] if result else False
+
+
+def delete_favorite_car(user_id, car_id):
+    """Удаляет авто из избранного"""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM orders WHERE user_id = %s AND car_id = %s;",
+                (user_id, car_id),
+            )
+            conn.commit()
