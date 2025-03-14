@@ -81,6 +81,8 @@ def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
     except requests.RequestException as e:
         print(f"Ошибка при запросе к calcus.ru: {e}")
         return None
+    finally:
+        time.sleep(3)
 
 
 def get_customs_fees(engine_volume, car_price, car_year, car_month, engine_type=1):
