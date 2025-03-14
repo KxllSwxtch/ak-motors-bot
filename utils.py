@@ -1,9 +1,16 @@
+import time
 import requests
 import datetime
 import locale
+import random
 
 PROXY_URL = "http://B01vby:GBno0x@45.118.250.2:8000"
 proxies = {"http": PROXY_URL, "https": PROXY_URL}
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
 
 
 def format_number(number):
@@ -61,7 +68,7 @@ def get_customs_fees_manual(engine_volume, car_price, car_age, engine_type=1):
     }
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "User-Agent": random.choice(USER_AGENTS),
         "Referer": "https://calcus.ru/",
         "Origin": "https://calcus.ru",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -99,7 +106,7 @@ def get_customs_fees(engine_volume, car_price, car_year, car_month, engine_type=
     }
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "User-Agent": random.choice(USER_AGENTS),
         "Referer": "https://calcus.ru/",
         "Origin": "https://calcus.ru",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -112,6 +119,8 @@ def get_customs_fees(engine_volume, car_price, car_year, car_month, engine_type=
     except requests.RequestException as e:
         print(f"Ошибка при запросе к calcus.ru: {e}")
         return None
+    finally:
+        time.sleep(3)
 
 
 def clean_number(value):
