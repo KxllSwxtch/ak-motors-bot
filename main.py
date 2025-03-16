@@ -1300,6 +1300,12 @@ def calculate_cost(link, message):
 
     user_id = message.chat.id
 
+    bot.send_message(
+        message.chat.id,
+        "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите...",
+        parse_mode="Markdown",
+    )
+
     # Если пользователь в списке FREE_ACCESS_USERS, он получает бесконечные расчёты
     if user_id in FREE_ACCESS_USERS:
         user_subscription = True
@@ -2453,10 +2459,6 @@ def handle_message(message):
         user_message,
     ):
         calculate_cost(user_message, message)
-        bot.send_message(
-            message.chat.id,
-            "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите...",
-        )
 
     # Проверка на другие команды
     elif user_message == "Написать менеджеру":
