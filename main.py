@@ -2452,10 +2452,11 @@ def handle_message(message):
         r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*|^https?://m\.kbchachacha\.com/.*|^https?://(web\.)?chutcha\.net/.*",
         user_message,
     ):
-         bot.send_message(
-            message.chat.id, "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите..."
-        )
         calculate_cost(user_message, message)
+        bot.send_message(
+            message.chat.id,
+            "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите...",
+        )
 
     # Проверка на другие команды
     elif user_message == "Написать менеджеру":
