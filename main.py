@@ -1294,6 +1294,10 @@ def get_car_info(url):
 def calculate_cost(link, message):
     global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
 
+    get_currency_rates()
+    get_rub_to_krw_rate()
+    get_usdt_to_krw_rate()
+
     user_id = message.chat.id
 
     # Если пользователь в списке FREE_ACCESS_USERS, он получает бесконечные расчёты
@@ -2448,6 +2452,9 @@ def handle_message(message):
         r"^https?://(www|fem)\.encar\.com/.*|^https?://(www\.)?kbchachacha\.com/.*|^https?://m\.kbchachacha\.com/.*|^https?://(web\.)?chutcha\.net/.*",
         user_message,
     ):
+         bot.send_message(
+            message.chat.id, "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите..."
+        )
         calculate_cost(user_message, message)
 
     # Проверка на другие команды
@@ -2520,9 +2527,6 @@ def handle_message(message):
 if __name__ == "__main__":
     # create_tables()
     set_bot_commands()
-    get_currency_rates()
-    get_rub_to_krw_rate()
-    get_usdt_to_krw_rate()
 
     # Обновляем курс каждые 12 часов
     scheduler = BackgroundScheduler()
