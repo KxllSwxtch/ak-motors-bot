@@ -1302,7 +1302,7 @@ def calculate_cost(link, message):
 
     bot.send_message(
         message.chat.id,
-        "Загружаю актуальный курс валют. ⏳ Пожалуйста подождите...",
+        "✅ Подгружаю актуальный курс валют и делаю расчёты. ⏳ Пожалуйста подождите...",
         parse_mode="Markdown",
     )
 
