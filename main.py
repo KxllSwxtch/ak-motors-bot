@@ -1346,9 +1346,7 @@ def calculate_cost(link, message):
     print_message("ЗАПРОС НА РАСЧЁТ АВТОМОБИЛЯ")
 
     # Отправляем сообщение и сохраняем его ID
-    # processing_message = bot.send_message(
-    #     message.chat.id, "Обрабатываю данные. Пожалуйста подождите ⏳"
-    # )
+    processing_message = bot.send_message(message.chat.id, "Обрабатываю данные... ⏳")
 
     car_id = None
     car_title = ""
