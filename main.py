@@ -1542,10 +1542,6 @@ def calculate_cost(link, message):
             + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
             + 120000
-            + customs_fee
-            + customs_duty
-            + recycling_fee
-            + 13000
         )
 
         total_cost_krw_vladivostok = (
@@ -1554,10 +1550,6 @@ def calculate_cost(link, message):
             + 1400000
             + 440000
             + (120000 / usd_to_rub_rate) * usd_to_krw_rate
-            + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
-            + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
-            + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
-            + (13000 / usd_to_rub_rate) * usd_to_krw_rate
         )
 
         total_cost_usd_vladivostok = (
@@ -1566,10 +1558,6 @@ def calculate_cost(link, message):
             + (1400000 / usd_to_krw_rate)
             + (440000 / usd_to_krw_rate)
             + (120000 / usd_to_rub_rate)
-            + (customs_fee / usd_to_rub_rate)
-            + (customs_duty / usd_to_rub_rate)
-            + (recycling_fee / usd_to_rub_rate)
-            + (13000 / usd_to_rub_rate)
         )
 
         # Полный расчёт до МСК
