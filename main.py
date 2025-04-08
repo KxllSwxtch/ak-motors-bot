@@ -945,7 +945,7 @@ def get_currency_rates():
     get_usd_to_krw_rate()
 
     # Получаем курс USD → RUB
-    get_usd_to_rub_rate()
+    # get_usd_to_rub_rate()
 
     rates_text = (
         f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
