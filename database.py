@@ -13,7 +13,7 @@ def connect_db():
 
 
 def create_tables():
-    """Создаём таблицу заказов, если её нет."""
+    """Создаём таблицы в базе данных."""
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -58,6 +58,19 @@ def create_tables():
                 CREATE TABLE IF NOT EXISTS subscriptions (
                     user_id BIGINT PRIMARY KEY,
                     status BOOLEAN DEFAULT FALSE
+                );
+                """
+            )
+
+            # Добавляем таблицу пользователей
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
                 """
             )
@@ -275,3 +288,36 @@ def delete_favorite_car(user_id, car_id):
                 (user_id, car_id),
             )
             conn.commit()
+
+
+def add_user(user_id, username, first_name, last_name):
+    """Добавляет пользователя в базу данных при первом запуске бота."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (user_id, username, first_name, last_name)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE 
+                SET username = EXCLUDED.username,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name;
+                """,
+                (user_id, username, first_name, last_name),
+            )
+            conn.commit()
+
+
+def get_all_users():
+    """Получает список всех пользователей бота."""
+    with connect_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT user_id, username, first_name, last_name, registered_at
+                FROM users
+                ORDER BY registered_at DESC;
+                """
+            )
+            users = cur.fetchall()
+    return users

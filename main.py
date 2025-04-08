@@ -23,6 +23,8 @@ from database import (
     check_user_subscription,
     update_user_subscription,
     delete_favorite_car,
+    get_all_users,
+    add_user,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -108,6 +110,60 @@ ORDER_STATUSES = {
     "5": "📦 Погрузка до МСК",
     "6": "🚛 Доставляется клиенту",
 }
+
+
+@bot.message_handler(commands=["stats"])
+def show_stats(message):
+    """Отображает статистику пользователей бота. Доступно только менеджерам."""
+    user_id = message.from_user.id
+
+    # Проверяем, является ли пользователь менеджером
+    if user_id not in MANAGERS:
+        bot.send_message(
+            user_id,
+            "⛔ У вас нет доступа к статистике. Эта функция доступна только менеджерам.",
+        )
+        return
+
+    # Получаем список пользователей
+    users = get_all_users()
+
+    # Формируем статистику
+    total_users = len(users)
+
+    # Формируем основное сообщение со статистикой
+    stats_message = f"📊 <b>Статистика бота</b>\n\n"
+    stats_message += f"👥 Всего пользователей: <b>{total_users}</b>\n\n"
+
+    # Отправляем основную статистику
+    bot.send_message(user_id, stats_message, parse_mode="HTML")
+
+    # Список последних пользователей разбиваем на части
+    if users:
+        # Берем последние 30 пользователей для отображения
+        recent_users = users[:30]
+
+        # Разбиваем на части по 10 пользователей
+        chunk_size = 10
+        for chunk_index in range(0, len(recent_users), chunk_size):
+            user_chunk = recent_users[chunk_index : chunk_index + chunk_size]
+
+            # chunk_message = f"<b>Пользователи {chunk_index + 1}-{chunk_index + len(user_chunk)}:</b>\n"
+
+            for i, user in enumerate(user_chunk, chunk_index + 1):
+                username = user["username"] if user["username"] else "Нет username"
+                name = f"{user['first_name']} {user['last_name'] or ''}".strip()
+                reg_date = (
+                    user["registered_at"].strftime("%d.%m.%Y %H:%M")
+                    if user["registered_at"]
+                    else "Неизвестно"
+                )
+
+                chunk_message += f"{i}. {name} (@{username})\n"
+                chunk_message += f"   ID: {user['user_id']} | Дата: {reg_date}\n\n============================"
+
+            # Отправляем каждую часть списка отдельным сообщением
+            bot.send_message(user_id, chunk_message, parse_mode="HTML")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("add_favorite_"))
@@ -824,11 +880,13 @@ def print_message(message):
 
 # Функция для установки команд меню
 def set_bot_commands():
+    """Устанавливает команды бота."""
     commands = [
         types.BotCommand("start", "Запустить бота"),
         types.BotCommand("exchange_rates", "Курсы валют"),
         types.BotCommand("my_cars", "Мои избранные автомобили"),
         types.BotCommand("orders", "Список заказов (Для менеджеров)"),
+        types.BotCommand("stats", "Статистика"),
     ]
 
     # Проверяем, является ли пользователь менеджером
@@ -1005,6 +1063,14 @@ def send_welcome(message):
     bot.send_photo(
         message.chat.id,
         photo=logo_url,
+    )
+
+    # Добавляем пользователя в базу данных
+    add_user(
+        message.from_user.id,
+        message.from_user.username,
+        message.from_user.first_name,
+        message.from_user.last_name,
     )
 
     # Отправляем приветственное сообщение
@@ -1541,23 +1607,15 @@ def calculate_cost(link, message):
             + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + 120000
         )
 
-        total_cost_krw_vladivostok = (
-            price_krw
-            + 1400000
-            + 1400000
-            + 440000
-            + (120000 / usd_to_rub_rate) * usd_to_krw_rate
-        )
+        total_cost_krw_vladivostok = price_krw + 1400000 + 1400000 + 440000
 
         total_cost_usd_vladivostok = (
             price_usd
             + (1400000 / usd_to_krw_rate)
             + (1400000 / usd_to_krw_rate)
             + (440000 / usd_to_krw_rate)
-            + (120000 / usd_to_rub_rate)
         )
 
         # Полный расчёт до МСК
@@ -2451,6 +2509,7 @@ def process_car_price(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_message = message.text.strip()
+    user_id = message.from_user.id
 
     # Проверяем нажатие кнопки "Рассчитать автомобиль"
     if user_message == CALCULATE_CAR_TEXT:
