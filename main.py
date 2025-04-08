@@ -49,6 +49,9 @@ load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
 
+# Удаляем вебхук перед запуском бота
+bot.delete_webhook()
+
 # Set locale for number formatting
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 
@@ -125,32 +128,21 @@ def show_stats(message):
         )
         return
 
-    # Получаем список пользователей
-    users = get_all_users()
+    try:
+        # Получаем список пользователей
+        users = get_all_users()
 
-    # Формируем статистику
-    total_users = len(users)
+        # Формируем статистику
+        total_users = len(users)
 
-    # Формируем основное сообщение со статистикой
-    stats_message = f"📊 <b>Статистика бота</b>\n\n"
-    stats_message += f"👥 Всего пользователей: <b>{total_users}</b>\n\n"
+        # Инициализируем сообщение здесь
+        chunk_message = f"📊 <b>Статистика бота</b>\n\n"
+        chunk_message += f"👥 Всего пользователей: <b>{total_users}</b>\n\n"
 
-    # Отправляем основную статистику
-    bot.send_message(user_id, stats_message, parse_mode="HTML")
-
-    # Список последних пользователей разбиваем на части
-    if users:
-        # Берем последние 30 пользователей для отображения
-        recent_users = users[:30]
-
-        # Разбиваем на части по 10 пользователей
-        chunk_size = 10
-        for chunk_index in range(0, len(recent_users), chunk_size):
-            user_chunk = recent_users[chunk_index : chunk_index + chunk_size]
-
-            # chunk_message = f"<b>Пользователи {chunk_index + 1}-{chunk_index + len(user_chunk)}:</b>\n"
-
-            for i, user in enumerate(user_chunk, chunk_index + 1):
+        # Список последних 10 пользователей
+        if users:
+            chunk_message += "<b>Последние 10 пользователей:</b>\n"
+            for i, user in enumerate(users[:10], 1):
                 username = user["username"] if user["username"] else "Нет username"
                 name = f"{user['first_name']} {user['last_name'] or ''}".strip()
                 reg_date = (
@@ -160,10 +152,15 @@ def show_stats(message):
                 )
 
                 chunk_message += f"{i}. {name} (@{username})\n"
-                chunk_message += f"   ID: {user['user_id']} | Дата: {reg_date}\n\n============================"
+                chunk_message += f"   ID: {user['user_id']} | Дата: {reg_date}\n---------------------------------\n"
+        else:
+            chunk_message += "Пока нет зарегистрированных пользователей."
 
-            # Отправляем каждую часть списка отдельным сообщением
-            bot.send_message(user_id, chunk_message, parse_mode="HTML")
+        bot.send_message(user_id, chunk_message, parse_mode="HTML")
+    except Exception as e:
+        bot.send_message(
+            user_id, f"❌ Произошла ошибка при получении статистики: {str(e)}"
+        )
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("add_favorite_"))
@@ -945,7 +942,7 @@ def get_currency_rates():
     get_usd_to_krw_rate()
 
     # Получаем курс USD → RUB
-    # get_usd_to_rub_rate()
+    get_usd_to_rub_rate()
 
     rates_text = (
         f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
