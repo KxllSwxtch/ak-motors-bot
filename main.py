@@ -886,7 +886,7 @@ def set_bot_commands():
         types.BotCommand("exchange_rates", "Курсы валют"),
         types.BotCommand("my_cars", "Мои избранные автомобили"),
         types.BotCommand("orders", "Список заказов (Для менеджеров)"),
-        types.BotCommand("stats", "Статистика"),
+        types.BotCommand("stats", "Статистика (для менеджеров)"),
     ]
 
     # Проверяем, является ли пользователь менеджером
