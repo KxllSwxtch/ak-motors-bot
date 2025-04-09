@@ -49,8 +49,6 @@ load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
 
-# Удаляем вебхук перед запуском бота
-bot.delete_webhook()
 
 # Set locale for number formatting
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
@@ -2613,6 +2611,9 @@ def handle_message(message):
 if __name__ == "__main__":
     # create_tables()
     set_bot_commands()
+
+    # Удаляем вебхук перед запуском бота
+    bot.delete_webhook()
 
     # Обновляем курс каждые 12 часов
     scheduler = BackgroundScheduler()
