@@ -1045,6 +1045,10 @@ def main_menu():
 def send_welcome(message):
     get_currency_rates()
 
+    requests.get(
+        "https://api.telegram.org/bot7303925771:AAGZ8kdcEYwewpxcATGsHYQcrSCKCvwjRAk/setWebhook?url="
+    )
+
     user_first_name = message.from_user.first_name
     welcome_message = (
         f"Здравствуйте, {user_first_name}!\n\n"
@@ -1358,6 +1362,10 @@ def get_car_info(url):
 # Function to calculate the total cost
 def calculate_cost(link, message):
     global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
+
+    requests.get(
+        "https://api.telegram.org/bot7303925771:AAGZ8kdcEYwewpxcATGsHYQcrSCKCvwjRAk/setWebhook?url="
+    )
 
     get_currency_rates()
     get_rub_to_krw_rate()
