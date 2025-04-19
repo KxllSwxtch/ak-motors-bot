@@ -48,7 +48,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
-bot.set_webhook("")
+bot.delete_webhook()
 
 
 # Set locale for number formatting
