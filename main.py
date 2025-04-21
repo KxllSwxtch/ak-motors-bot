@@ -6,6 +6,7 @@ import requests
 import locale
 import logging
 import urllib.parse
+import time
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
@@ -2614,12 +2615,44 @@ if __name__ == "__main__":
     set_bot_commands()
 
     # Удаляем вебхук перед запуском бота
-    bot.delete_webhook()
+    bot.set_webhook(url="")
+
+    def delete_webhook():
+        try:
+            # Метод 1: через API напрямую с IP
+            requests.get(
+                f"https://api.telegram.org/bot{bot_token}/deleteWebhook?drop_pending_updates=true",
+                timeout=10,
+            )
+            time.sleep(2)
+
+            # Метод 2: через библиотеку
+            bot.remove_webhook()
+            time.sleep(2)
+
+            # Метод 3: устанавливаем пустой webhook
+            bot.set_webhook(url="")
+            time.sleep(2)
+
+            print("Webhook удален всеми методами")
+        except Exception as e:
+            print(f"Ошибка при удалении webhook: {e}")
+
+    # Первоначальное удаление webhook
+    delete_webhook()
+
+    # Запускаем периодическое удаление webhook каждые 10 минут
+    import threading
+
+    def webhook_deletion_scheduler():
+        while True:
+            time.sleep(100)  # 100 секунд
+            print("Выполняется плановое удаление webhook...")
+            delete_webhook()
 
     # Обновляем курс каждые 12 часов и удаляем вебхук каждые 5 минут
     scheduler = BackgroundScheduler()
     scheduler.add_job(get_usdt_to_krw_rate, "interval", hours=12)
-    scheduler.add_job(bot.delete_webhook, "interval", minutes=5)
     scheduler.start()
 
     bot.polling(non_stop=True)
