@@ -7,6 +7,7 @@ import locale
 import logging
 import urllib.parse
 import time
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
@@ -49,7 +50,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
-bot.delete_webhook()
 
 
 # Set locale for number formatting
@@ -2611,11 +2611,9 @@ def handle_message(message):
 
 # Run the bot
 if __name__ == "__main__":
-    # create_tables()
+    # Настройка обхода блокировок
+    telebot.apihelper.RETRY_ON_ERROR = True
     set_bot_commands()
-
-    # Удаляем вебхук перед запуском бота
-    bot.set_webhook(url="")
 
     def delete_webhook():
         try:
@@ -2642,17 +2640,16 @@ if __name__ == "__main__":
     delete_webhook()
 
     # Запускаем периодическое удаление webhook каждые 10 минут
-    import threading
-
     def webhook_deletion_scheduler():
         while True:
             time.sleep(100)  # 100 секунд
             print("Выполняется плановое удаление webhook...")
             delete_webhook()
 
-    # Обновляем курс каждые 12 часов и удаляем вебхук каждые 5 минут
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(get_usdt_to_krw_rate, "interval", hours=12)
-    scheduler.start()
+    # Запускаем планировщик в отдельном потоке
+    webhook_thread = threading.Thread(target=webhook_deletion_scheduler)
+    webhook_thread.daemon = True  # Поток завершится вместе с основной программой
+    webhook_thread.start()
 
-    bot.polling(non_stop=True)
+    # Запускаем бота
+    bot.polling(none_stop=True, interval=1, timeout=30)
