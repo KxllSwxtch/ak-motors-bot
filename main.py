@@ -2632,6 +2632,8 @@ if __name__ == "__main__":
             bot.set_webhook(url="")
             time.sleep(2)
 
+            set_bot_commands()
+
             print("Webhook удален всеми методами")
         except Exception as e:
             print(f"Ошибка при удалении webhook: {e}")
@@ -2645,6 +2647,7 @@ if __name__ == "__main__":
             time.sleep(100)  # 100 секунд
             print("Выполняется плановое удаление webhook...")
             delete_webhook()
+            set_bot_commands()
 
     # Запускаем планировщик в отдельном потоке
     webhook_thread = threading.Thread(target=webhook_deletion_scheduler)
