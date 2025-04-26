@@ -2645,7 +2645,7 @@ if __name__ == "__main__":
     # Запускаем периодическое удаление webhook каждые 10 минут
     def webhook_deletion_scheduler():
         while True:
-            time.sleep(100)  # 100 секунд
+            time.sleep(10)  # 100 секунд
             print("Выполняется плановое удаление webhook...")
             delete_webhook()
             set_bot_commands()
