@@ -2630,7 +2630,7 @@ if __name__ == "__main__":
             time.sleep(2)
 
             # Метод 3: устанавливаем пустой webhook
-            bot.set_webhook(url="")
+            # bot.set_webhook(url="")
             time.sleep(2)
 
             set_bot_commands()
