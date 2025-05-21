@@ -1055,13 +1055,13 @@ def send_welcome(message):
     )
 
     # Логотип компании
-    logo_url = "https://res.cloudinary.com/pomegranitedesign/image/upload/v1740623897/AK%20Motors/akmotorslogo.jpg"
+    logo_path = "assets/logo.jpeg"
 
-    # Отправляем логотип перед сообщением
-    bot.send_photo(
-        message.chat.id,
-        photo=logo_url,
-    )
+    with open(logo_path, "rb") as logo_file:
+        bot.send_photo(
+            message.chat.id,
+            photo=types.InputFile(logo_file),
+        )
 
     # Добавляем пользователя в базу данных
     add_user(
