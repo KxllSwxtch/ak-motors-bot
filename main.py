@@ -915,7 +915,7 @@ def get_usdt_to_krw_rate():
 
     print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
 
-    return float(krw_rate) + 8
+    return float(krw_rate) - 34
 
 
 def get_rub_to_krw_rate():
