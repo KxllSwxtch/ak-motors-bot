@@ -106,6 +106,7 @@ FREE_ACCESS_USERS = {
     315651660,
     199183799,
     838374225,
+    714156508,
 }
 
 ORDER_STATUSES = {
@@ -906,7 +907,7 @@ def get_usdt_to_krw_rate():
 
     # URL для получения курса USDT к KRW от NAVER
     url = "https://m.stock.naver.com/front-api/realTime/crypto"
-    
+
     # Headers и cookies для NAVER API
     cookies = {
         "NAC": "2QfGCIBudkAvB",
@@ -917,7 +918,7 @@ def get_usdt_to_krw_rate():
         "page_uid": "jcVFZlqptbNssCq2SA0ssssstmo-042991",
         "BUC": "YxFFeGb7WKKpPsaFnPzdYRByVimsTwvDlcZUcJ5oBKg=",
     }
-    
+
     headers = {
         "accept": "application/json, text/plain, */*",
         "accept-language": "en,ru;q=0.9,en-CA;q=0.8,la;q=0.7,fr;q=0.6,ko;q=0.5",
@@ -933,29 +934,31 @@ def get_usdt_to_krw_rate():
         "sec-fetch-site": "same-origin",
         "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
     }
-    
+
     json_data = {
         "fqnfTickers": [
             "USDT_KRW_UPBIT",
             "USDT_KRW_BITHUMB",
         ],
     }
-    
+
     try:
         response = requests.post(url, cookies=cookies, headers=headers, json=json_data)
         response.raise_for_status()  # Проверяем успешность запроса
         data = response.json()
-        
+
         # Извлекаем курс USDT к KRW из ответа NAVER (используем UPBIT)
         trade_price = data["result"]["USDT_KRW_UPBIT"]["tradePrice"]
-        
+
         # Вычитаем 25 из курса как указано в требованиях
         usdt_to_krw_rate = float(trade_price) - 25
-        
-        print(f"Курс USDT к KRW (NAVER) -> {usdt_to_krw_rate} (исходный: {trade_price})")
-        
+
+        print(
+            f"Курс USDT к KRW (NAVER) -> {usdt_to_krw_rate} (исходный: {trade_price})"
+        )
+
         return usdt_to_krw_rate
-        
+
     except requests.RequestException as e:
         print(f"Ошибка при получении курса USDT к KRW от NAVER: {e}")
         # Возвращаем значение по умолчанию в случае ошибки
