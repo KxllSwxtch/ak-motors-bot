@@ -2817,6 +2817,9 @@ def handle_message(message):
 
 # Run the bot
 if __name__ == "__main__":
+    # Создаем таблицы в базе данных
+    create_tables()
+    
     # Настройка обхода блокировок
     telebot.apihelper.RETRY_ON_ERROR = True
     set_bot_commands()
