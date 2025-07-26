@@ -75,6 +75,19 @@ def create_tables():
                 """
             )
 
+            # Добавляем таблицу курсов валют
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS exchange_rates (
+                    id SERIAL PRIMARY KEY,
+                    rate_type TEXT NOT NULL,
+                    rate_value FLOAT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_by BIGINT NOT NULL
+                );
+                """
+            )
+
             conn.commit()
 
 
@@ -321,3 +334,34 @@ def get_all_users():
             )
             users = cur.fetchall()
     return users
+
+
+def set_usdt_krw_rate(rate_value, updated_by):
+    """Устанавливает курс USDT к KRW в базе данных."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO exchange_rates (rate_type, rate_value, updated_by)
+                VALUES ('USDT_KRW', %s, %s);
+                """,
+                (rate_value, updated_by),
+            )
+            conn.commit()
+
+
+def get_usdt_krw_rate_from_db():
+    """Получает последний установленный курс USDT к KRW из базы данных."""
+    with connect_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT rate_value, updated_at, updated_by
+                FROM exchange_rates
+                WHERE rate_type = 'USDT_KRW'
+                ORDER BY updated_at DESC
+                LIMIT 1;
+                """
+            )
+            result = cur.fetchone()
+            return result if result else None

@@ -8,6 +8,7 @@ import logging
 import urllib.parse
 import time
 import threading
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
@@ -27,6 +28,8 @@ from database import (
     delete_favorite_car,
     get_all_users,
     add_user,
+    set_usdt_krw_rate,
+    get_usdt_krw_rate_from_db,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -85,6 +88,8 @@ usdt_to_krw_rate = 0
 pending_orders = {}
 user_contacts = {}
 user_names = {}
+# Для хранения состояния установки курса USDT
+pending_usdt_rate = {}
 
 MANAGERS = [728438182, 642176871, 8039170978]
 FREE_ACCESS_USERS = {
@@ -165,6 +170,71 @@ def show_stats(message):
         bot.send_message(
             user_id, f"❌ Произошла ошибка при получении статистики: {str(e)}"
         )
+
+
+@bot.message_handler(commands=["set_usdt_rate"])
+def set_usdt_rate_command(message):
+    """Устанавливает курс USDT к KRW. Доступно только менеджерам."""
+    user_id = message.from_user.id
+    
+    # Проверяем, является ли пользователь менеджером
+    if user_id not in MANAGERS:
+        bot.send_message(
+            user_id,
+            "⛔ У вас нет доступа к этой функции. Она доступна только менеджерам.",
+        )
+        return
+    
+    try:
+        # Получаем текущий курс из базы данных
+        db_rate = get_usdt_krw_rate_from_db()
+        
+        # Получаем текущий курс (либо из БД, либо последний из API)
+        current_rate = db_rate['rate_value'] if db_rate else usdt_to_krw_rate
+        
+        current_rate_info = ""
+        if db_rate:
+            current_rate_info = f"\n\n📊 Текущий курс из базы данных: ₩{format_number(db_rate['rate_value'])}"
+            current_rate_info += f"\n⏰ Установлен: {db_rate['updated_at'].strftime('%d.%m.%Y %H:%M')}"
+        else:
+            current_rate_info = f"\n\n📊 Текущий курс (API): ₩{format_number(usdt_to_krw_rate)}"
+        
+        # Добавляем пользователя в ожидание ввода курса
+        pending_usdt_rate[user_id] = True
+        
+        bot.send_message(
+            user_id,
+            f"💱 <b>Установка курса USDT к KRW</b>{current_rate_info}\n\n"
+            "📝 Введите новый курс USDT к KRW (например: 1343.5):",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        bot.send_message(
+            user_id, f"❌ Произошла ошибка: {str(e)}"
+        )
+
+
+@bot.message_handler(commands=["cancel"])
+def cancel_command(message):
+    """Отменяет любое ожидающее действие."""
+    user_id = message.from_user.id
+    
+    cancelled = False
+    
+    # Проверяем и отменяем ожидание ввода курса USDT
+    if user_id in pending_usdt_rate:
+        del pending_usdt_rate[user_id]
+        cancelled = True
+        bot.send_message(user_id, "❌ Установка курса USDT отменена.")
+    
+    # Проверяем и отменяем другие ожидающие действия
+    if user_id in pending_orders:
+        del pending_orders[user_id]
+        cancelled = True
+        bot.send_message(user_id, "❌ Оформление заказа отменено.")
+    
+    if not cancelled:
+        bot.send_message(user_id, "ℹ️ Нет активных действий для отмены.")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("add_favorite_"))
@@ -557,6 +627,76 @@ def handle_full_name(message):
     del pending_orders[user_id]
 
 
+@bot.message_handler(
+    func=lambda message: not message.text.startswith("/")
+    and message.chat.id in pending_usdt_rate
+)
+def handle_usdt_rate_input(message):
+    """Обрабатывает ввод нового курса USDT."""
+    user_id = message.chat.id
+    rate_text = message.text.strip()
+    
+    try:
+        # Пытаемся преобразовать введенное значение в число
+        new_rate = float(rate_text.replace(',', '.'))
+        
+        # Проверяем, что курс в разумных пределах
+        if new_rate < 100 or new_rate > 10000:
+            bot.send_message(
+                user_id,
+                "❌ Неверное значение курса. Курс должен быть между 100 и 10000.\n"
+                "Попробуйте еще раз или отправьте /cancel для отмены."
+            )
+            return
+        
+        # Сохраняем курс в базу данных
+        set_usdt_krw_rate(new_rate, user_id)
+        
+        # Обновляем глобальную переменную
+        global usdt_to_krw_rate
+        usdt_to_krw_rate = new_rate
+        
+        # Удаляем состояние ожидания
+        del pending_usdt_rate[user_id]
+        
+        # Подтверждаем успешное обновление
+        bot.send_message(
+            user_id,
+            f"✅ <b>Курс USDT успешно обновлен!</b>\n\n"
+            f"💱 Новый курс: ₩{format_number(new_rate)}\n"
+            f"👤 Установлен: {message.from_user.first_name} (@{message.from_user.username})",
+            parse_mode="HTML"
+        )
+        
+        # Уведомляем других менеджеров об изменении курса
+        for manager_id in MANAGERS:
+            if manager_id != user_id:
+                try:
+                    bot.send_message(
+                        manager_id,
+                        f"📢 <b>Обновление курса USDT</b>\n\n"
+                        f"💱 Новый курс: ₩{format_number(new_rate)}\n"
+                        f"👤 Установил: {message.from_user.first_name} (@{message.from_user.username})",
+                        parse_mode="HTML"
+                    )
+                except:
+                    pass
+                    
+    except ValueError:
+        bot.send_message(
+            user_id,
+            "❌ Неверный формат. Введите число (например: 1343.5).\n"
+            "Попробуйте еще раз или отправьте /cancel для отмены."
+        )
+    except Exception as e:
+        # Удаляем состояние ожидания в случае ошибки
+        if user_id in pending_usdt_rate:
+            del pending_usdt_rate[user_id]
+        bot.send_message(
+            user_id, f"❌ Произошла ошибка при сохранении курса: {str(e)}"
+        )
+
+
 # Функция оформления заказа
 def process_order(user_id, car_id, username, phone_number):
     # Достаём авто из списка
@@ -888,6 +1028,7 @@ def set_bot_commands():
         types.BotCommand("my_cars", "Мои избранные автомобили"),
         types.BotCommand("orders", "Список заказов (Для менеджеров)"),
         types.BotCommand("stats", "Статистика (для менеджеров)"),
+        types.BotCommand("set_usdt_rate", "Установить курс USDT (для менеджеров)"),
     ]
 
     # Проверяем, является ли пользователь менеджером
@@ -904,7 +1045,16 @@ def set_bot_commands():
 
 def get_usdt_to_krw_rate():
     global usdt_to_krw_rate
+    
+    # Сначала проверяем, есть ли курс в базе данных
+    db_rate = get_usdt_krw_rate_from_db()
+    if db_rate:
+        # Используем курс из базы данных, если он был установлен менеджером
+        usdt_to_krw_rate = db_rate['rate_value']
+        print(f"Курс USDT к KRW из БД -> {usdt_to_krw_rate} (установлен: {db_rate['updated_at']})")
+        return usdt_to_krw_rate
 
+    # Если в базе нет курса, получаем из API
     # URL для получения курса USDT к KRW от NAVER
     url = "https://m.stock.naver.com/front-api/realTime/crypto"
 
