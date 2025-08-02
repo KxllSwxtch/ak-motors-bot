@@ -93,6 +93,7 @@ pending_usdt_rate = {}
 
 MANAGERS = [728438182, 642176871, 8039170978]
 FREE_ACCESS_USERS = {
+    382770531,
     1759578050,
     7914145866,
     627689711,  # Андрей Дей
@@ -176,7 +177,7 @@ def show_stats(message):
 def set_usdt_rate_command(message):
     """Устанавливает курс USDT к KRW. Доступно только менеджерам."""
     user_id = message.from_user.id
-    
+
     # Проверяем, является ли пользователь менеджером
     if user_id not in MANAGERS:
         bot.send_message(
@@ -184,55 +185,57 @@ def set_usdt_rate_command(message):
             "⛔ У вас нет доступа к этой функции. Она доступна только менеджерам.",
         )
         return
-    
+
     try:
         # Получаем текущий курс из базы данных
         db_rate = get_usdt_krw_rate_from_db()
-        
+
         # Получаем текущий курс (либо из БД, либо последний из API)
-        current_rate = db_rate['rate_value'] if db_rate else usdt_to_krw_rate
-        
+        current_rate = db_rate["rate_value"] if db_rate else usdt_to_krw_rate
+
         current_rate_info = ""
         if db_rate:
             current_rate_info = f"\n\n📊 Текущий курс из базы данных: ₩{format_number(db_rate['rate_value'])}"
-            current_rate_info += f"\n⏰ Установлен: {db_rate['updated_at'].strftime('%d.%m.%Y %H:%M')}"
+            current_rate_info += (
+                f"\n⏰ Установлен: {db_rate['updated_at'].strftime('%d.%m.%Y %H:%M')}"
+            )
         else:
-            current_rate_info = f"\n\n📊 Текущий курс (API): ₩{format_number(usdt_to_krw_rate)}"
-        
+            current_rate_info = (
+                f"\n\n📊 Текущий курс (API): ₩{format_number(usdt_to_krw_rate)}"
+            )
+
         # Добавляем пользователя в ожидание ввода курса
         pending_usdt_rate[user_id] = True
-        
+
         bot.send_message(
             user_id,
             f"💱 <b>Установка курса USDT к KRW</b>{current_rate_info}\n\n"
             "📝 Введите новый курс USDT к KRW (например: 1343.5):",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
     except Exception as e:
-        bot.send_message(
-            user_id, f"❌ Произошла ошибка: {str(e)}"
-        )
+        bot.send_message(user_id, f"❌ Произошла ошибка: {str(e)}")
 
 
 @bot.message_handler(commands=["cancel"])
 def cancel_command(message):
     """Отменяет любое ожидающее действие."""
     user_id = message.from_user.id
-    
+
     cancelled = False
-    
+
     # Проверяем и отменяем ожидание ввода курса USDT
     if user_id in pending_usdt_rate:
         del pending_usdt_rate[user_id]
         cancelled = True
         bot.send_message(user_id, "❌ Установка курса USDT отменена.")
-    
+
     # Проверяем и отменяем другие ожидающие действия
     if user_id in pending_orders:
         del pending_orders[user_id]
         cancelled = True
         bot.send_message(user_id, "❌ Оформление заказа отменено.")
-    
+
     if not cancelled:
         bot.send_message(user_id, "ℹ️ Нет активных действий для отмены.")
 
@@ -635,39 +638,39 @@ def handle_usdt_rate_input(message):
     """Обрабатывает ввод нового курса USDT."""
     user_id = message.chat.id
     rate_text = message.text.strip()
-    
+
     try:
         # Пытаемся преобразовать введенное значение в число
-        new_rate = float(rate_text.replace(',', '.'))
-        
+        new_rate = float(rate_text.replace(",", "."))
+
         # Проверяем, что курс в разумных пределах
         if new_rate < 100 or new_rate > 10000:
             bot.send_message(
                 user_id,
                 "❌ Неверное значение курса. Курс должен быть между 100 и 10000.\n"
-                "Попробуйте еще раз или отправьте /cancel для отмены."
+                "Попробуйте еще раз или отправьте /cancel для отмены.",
             )
             return
-        
+
         # Сохраняем курс в базу данных
         set_usdt_krw_rate(new_rate, user_id)
-        
+
         # Обновляем глобальную переменную
         global usdt_to_krw_rate
         usdt_to_krw_rate = new_rate
-        
+
         # Удаляем состояние ожидания
         del pending_usdt_rate[user_id]
-        
+
         # Подтверждаем успешное обновление
         bot.send_message(
             user_id,
             f"✅ <b>Курс USDT успешно обновлен!</b>\n\n"
             f"💱 Новый курс: ₩{format_number(new_rate)}\n"
             f"👤 Установлен: {message.from_user.first_name} (@{message.from_user.username})",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
-        
+
         # Уведомляем других менеджеров об изменении курса
         for manager_id in MANAGERS:
             if manager_id != user_id:
@@ -677,24 +680,22 @@ def handle_usdt_rate_input(message):
                         f"📢 <b>Обновление курса USDT</b>\n\n"
                         f"💱 Новый курс: ₩{format_number(new_rate)}\n"
                         f"👤 Установил: {message.from_user.first_name} (@{message.from_user.username})",
-                        parse_mode="HTML"
+                        parse_mode="HTML",
                     )
                 except:
                     pass
-                    
+
     except ValueError:
         bot.send_message(
             user_id,
             "❌ Неверный формат. Введите число (например: 1343.5).\n"
-            "Попробуйте еще раз или отправьте /cancel для отмены."
+            "Попробуйте еще раз или отправьте /cancel для отмены.",
         )
     except Exception as e:
         # Удаляем состояние ожидания в случае ошибки
         if user_id in pending_usdt_rate:
             del pending_usdt_rate[user_id]
-        bot.send_message(
-            user_id, f"❌ Произошла ошибка при сохранении курса: {str(e)}"
-        )
+        bot.send_message(user_id, f"❌ Произошла ошибка при сохранении курса: {str(e)}")
 
 
 # Функция оформления заказа
@@ -1045,13 +1046,15 @@ def set_bot_commands():
 
 def get_usdt_to_krw_rate():
     global usdt_to_krw_rate
-    
+
     # Сначала проверяем, есть ли курс в базе данных
     db_rate = get_usdt_krw_rate_from_db()
     if db_rate:
         # Используем курс из базы данных, если он был установлен менеджером
-        usdt_to_krw_rate = db_rate['rate_value']
-        print(f"Курс USDT к KRW из БД -> {usdt_to_krw_rate} (установлен: {db_rate['updated_at']})")
+        usdt_to_krw_rate = db_rate["rate_value"]
+        print(
+            f"Курс USDT к KRW из БД -> {usdt_to_krw_rate} (установлен: {db_rate['updated_at']})"
+        )
         return usdt_to_krw_rate
 
     # Если в базе нет курса, получаем из API
@@ -2819,7 +2822,7 @@ def handle_message(message):
 if __name__ == "__main__":
     # Создаем таблицы в базе данных
     create_tables()
-    
+
     # Настройка обхода блокировок
     telebot.apihelper.RETRY_ON_ERROR = True
     set_bot_commands()
