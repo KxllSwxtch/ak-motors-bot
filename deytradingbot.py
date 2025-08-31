@@ -6,8 +6,6 @@ import requests
 import locale
 import logging
 import urllib.parse
-import time
-import threading
 from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -25,11 +23,10 @@ from database import (
     increment_calculation_count,
     check_user_subscription,
     update_user_subscription,
-    delete_favorite_car,
     get_all_users,
-    add_user,
-    set_usdt_krw_rate,
-    get_usdt_krw_rate_from_db,
+    add_or_update_user,
+    user_exists,
+    get_all_bot_users,
 )
 from bs4 import BeautifulSoup
 from io import BytesIO
@@ -47,13 +44,12 @@ from utils import (
 )
 
 CALCULATE_CAR_TEXT = "Рассчитать Автомобиль (Encar, KBChaCha, ChutCha)"
-CHANNEL_USERNAME = "akmotors96"
+CHANNEL_USERNAME = "dey_trading"
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(bot_token)
-
 
 # Set locale for number formatting
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
@@ -88,32 +84,10 @@ usdt_to_krw_rate = 0
 pending_orders = {}
 user_contacts = {}
 user_names = {}
-# Для хранения состояния установки курса USDT
-pending_usdt_rate = {}
 
-MANAGERS = [728438182, 642176871, 8039170978]
-FREE_ACCESS_USERS = {
-    382770531,
-    1759578050,
-    7914145866,
-    627689711,  # Андрей Дей
-    8039170978,  # Артур
-    642176871,  # Тимур
-    728438182,  # Дима,
-    1276031616,
-    738485560,
-    6581762873,
-    1333492483,
-    708642607,
-    74973321,
-    1273291923,
-    6210255867,
-    5106639729,
-    315651660,
-    199183799,
-    838374225,
-    714156508,
-}
+MANAGERS = [728438182, 627689711]
+
+FREE_ACCESS_USERS = {728438182, 627689711}
 
 ORDER_STATUSES = {
     "1": "🚗 Авто выкуплен (на базе)",
@@ -123,121 +97,6 @@ ORDER_STATUSES = {
     "5": "📦 Погрузка до МСК",
     "6": "🚛 Доставляется клиенту",
 }
-
-
-@bot.message_handler(commands=["stats"])
-def show_stats(message):
-    """Отображает статистику пользователей бота. Доступно только менеджерам."""
-    user_id = message.from_user.id
-
-    # Проверяем, является ли пользователь менеджером
-    if user_id not in MANAGERS:
-        bot.send_message(
-            user_id,
-            "⛔ У вас нет доступа к статистике. Эта функция доступна только менеджерам.",
-        )
-        return
-
-    try:
-        # Получаем список пользователей
-        users = get_all_users()
-
-        # Формируем статистику
-        total_users = len(users)
-
-        # Инициализируем сообщение здесь
-        chunk_message = f"📊 <b>Статистика бота</b>\n\n"
-        chunk_message += f"👥 Всего пользователей: <b>{total_users}</b>\n\n"
-
-        # Список последних 10 пользователей
-        if users:
-            chunk_message += "<b>Последние 10 пользователей:</b>\n"
-            for i, user in enumerate(users[:10], 1):
-                username = user["username"] if user["username"] else "Нет username"
-                name = f"{user['first_name']} {user['last_name'] or ''}".strip()
-                reg_date = (
-                    user["registered_at"].strftime("%d.%m.%Y %H:%M")
-                    if user["registered_at"]
-                    else "Неизвестно"
-                )
-
-                chunk_message += f"{i}. {name} (@{username})\n"
-                chunk_message += f"   ID: {user['user_id']} | Дата: {reg_date}\n---------------------------------\n"
-        else:
-            chunk_message += "Пока нет зарегистрированных пользователей."
-
-        bot.send_message(user_id, chunk_message, parse_mode="HTML")
-    except Exception as e:
-        bot.send_message(
-            user_id, f"❌ Произошла ошибка при получении статистики: {str(e)}"
-        )
-
-
-@bot.message_handler(commands=["set_usdt_rate"])
-def set_usdt_rate_command(message):
-    """Устанавливает курс USDT к KRW. Доступно только менеджерам."""
-    user_id = message.from_user.id
-
-    # Проверяем, является ли пользователь менеджером
-    if user_id not in MANAGERS:
-        bot.send_message(
-            user_id,
-            "⛔ У вас нет доступа к этой функции. Она доступна только менеджерам.",
-        )
-        return
-
-    try:
-        # Получаем текущий курс из базы данных
-        db_rate = get_usdt_krw_rate_from_db()
-
-        # Получаем текущий курс (либо из БД, либо последний из API)
-        current_rate = db_rate["rate_value"] if db_rate else usdt_to_krw_rate
-
-        current_rate_info = ""
-        if db_rate:
-            current_rate_info = f"\n\n📊 Текущий курс из базы данных: ₩{format_number(db_rate['rate_value'])}"
-            current_rate_info += (
-                f"\n⏰ Установлен: {db_rate['updated_at'].strftime('%d.%m.%Y %H:%M')}"
-            )
-        else:
-            current_rate_info = (
-                f"\n\n📊 Текущий курс (API): ₩{format_number(usdt_to_krw_rate)}"
-            )
-
-        # Добавляем пользователя в ожидание ввода курса
-        pending_usdt_rate[user_id] = True
-
-        bot.send_message(
-            user_id,
-            f"💱 <b>Установка курса USDT к KRW</b>{current_rate_info}\n\n"
-            "📝 Введите новый курс USDT к KRW (например: 1343.5):",
-            parse_mode="HTML",
-        )
-    except Exception as e:
-        bot.send_message(user_id, f"❌ Произошла ошибка: {str(e)}")
-
-
-@bot.message_handler(commands=["cancel"])
-def cancel_command(message):
-    """Отменяет любое ожидающее действие."""
-    user_id = message.from_user.id
-
-    cancelled = False
-
-    # Проверяем и отменяем ожидание ввода курса USDT
-    if user_id in pending_usdt_rate:
-        del pending_usdt_rate[user_id]
-        cancelled = True
-        bot.send_message(user_id, "❌ Установка курса USDT отменена.")
-
-    # Проверяем и отменяем другие ожидающие действия
-    if user_id in pending_orders:
-        del pending_orders[user_id]
-        cancelled = True
-        bot.send_message(user_id, "❌ Оформление заказа отменено.")
-
-    if not cancelled:
-        bot.send_message(user_id, "ℹ️ Нет активных действий для отмены.")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("add_favorite_"))
@@ -330,9 +189,8 @@ def show_favorite_cars(message):
             f"${format_number(total_cost_usd)} | ₩{format_number(total_cost_krw)} | {format_number(total_cost_rub)} ₽\n\n"
             f"📌 *Статус:* {car_status}\n\n"
             f"[🔗 Ссылка на автомобиль]({car_link})\n\n"
-            f"Консультация с менеджерами:\n\n"
-            f"+82-10-2934-8855 (Артур)\n"
-            f"@timyo97 (Тимур)\n\n"
+            f"Консультация с менеджером:\n\n"
+            f"+82-10-8855-03865 (Андрей)\n"
         )
 
         # Создаём клавиатуру
@@ -344,11 +202,6 @@ def show_favorite_cars(message):
                     callback_data=f"order_car_{car_id}",
                 )
             )
-        keyboard.add(
-            types.InlineKeyboardButton(
-                "❌ Удалить авто из списка", callback_data=f"delete_car_{car_id}"
-            )
-        )
         keyboard.add(
             types.InlineKeyboardButton(
                 "Вернуться в главное меню", callback_data="main_menu"
@@ -630,74 +483,6 @@ def handle_full_name(message):
     del pending_orders[user_id]
 
 
-@bot.message_handler(
-    func=lambda message: not message.text.startswith("/")
-    and message.chat.id in pending_usdt_rate
-)
-def handle_usdt_rate_input(message):
-    """Обрабатывает ввод нового курса USDT."""
-    user_id = message.chat.id
-    rate_text = message.text.strip()
-
-    try:
-        # Пытаемся преобразовать введенное значение в число
-        new_rate = float(rate_text.replace(",", "."))
-
-        # Проверяем, что курс в разумных пределах
-        if new_rate < 100 or new_rate > 10000:
-            bot.send_message(
-                user_id,
-                "❌ Неверное значение курса. Курс должен быть между 100 и 10000.\n"
-                "Попробуйте еще раз или отправьте /cancel для отмены.",
-            )
-            return
-
-        # Сохраняем курс в базу данных
-        set_usdt_krw_rate(new_rate, user_id)
-
-        # Обновляем глобальную переменную
-        global usdt_to_krw_rate
-        usdt_to_krw_rate = new_rate
-
-        # Удаляем состояние ожидания
-        del pending_usdt_rate[user_id]
-
-        # Подтверждаем успешное обновление
-        bot.send_message(
-            user_id,
-            f"✅ <b>Курс USDT успешно обновлен!</b>\n\n"
-            f"💱 Новый курс: ₩{format_number(new_rate)}\n"
-            f"👤 Установлен: {message.from_user.first_name} (@{message.from_user.username})",
-            parse_mode="HTML",
-        )
-
-        # Уведомляем других менеджеров об изменении курса
-        for manager_id in MANAGERS:
-            if manager_id != user_id:
-                try:
-                    bot.send_message(
-                        manager_id,
-                        f"📢 <b>Обновление курса USDT</b>\n\n"
-                        f"💱 Новый курс: ₩{format_number(new_rate)}\n"
-                        f"👤 Установил: {message.from_user.first_name} (@{message.from_user.username})",
-                        parse_mode="HTML",
-                    )
-                except:
-                    pass
-
-    except ValueError:
-        bot.send_message(
-            user_id,
-            "❌ Неверный формат. Введите число (например: 1343.5).\n"
-            "Попробуйте еще раз или отправьте /cancel для отмены.",
-        )
-    except Exception as e:
-        # Удаляем состояние ожидания в случае ошибки
-        if user_id in pending_usdt_rate:
-            del pending_usdt_rate[user_id]
-        bot.send_message(user_id, f"❌ Произошла ошибка при сохранении курса: {str(e)}")
-
-
 # Функция оформления заказа
 def process_order(user_id, car_id, username, phone_number):
     # Достаём авто из списка
@@ -802,6 +587,91 @@ def show_orders(message):
         )
 
 
+@bot.message_handler(commands=["stats"])
+def show_stats(message):
+    admin_id = message.chat.id
+
+    # Проверяем, является ли пользователь администратором
+    if admin_id not in MANAGERS:
+        bot.send_message(admin_id, "❌ У вас нет доступа к статистике.")
+        return
+
+    # Получаем список всех пользователей
+    users = get_all_bot_users()
+
+    if not users:
+        bot.send_message(admin_id, "📊 Статистика: пользователей не найдено.")
+        return
+
+    stats_message = "📊 Статистика пользователей:\n\n"
+
+    for idx, user in enumerate(users, start=1):
+        user_id = user.get("user_id")
+        username = user.get("username", "")
+        first_name = user.get("first_name", "")
+        last_name = user.get("last_name", "")
+
+        # Формируем имя пользователя
+        if first_name and last_name:
+            user_name = f"{first_name} {last_name}"
+        elif first_name:
+            user_name = first_name
+        elif username:
+            user_name = username
+        else:
+            user_name = f"User {user_id}"
+
+        # Форматируем username
+        username_display = f"(@{username})" if username else ""
+
+        # Форматируем дату первой активности
+        first_activity = user.get("created_at")
+        if first_activity:
+            try:
+                # Если first_activity - строка, преобразуем в datetime
+                if isinstance(first_activity, str):
+                    first_activity = datetime.strptime(
+                        first_activity, "%Y-%m-%d %H:%M:%S"
+                    )
+                # Форматируем дату
+                activity_date = first_activity.strftime("%Y-%m-%d")
+            except (ValueError, AttributeError):
+                # Если возникла ошибка при форматировании, используем как есть
+                if isinstance(first_activity, str):
+                    parts = first_activity.split(" ")
+                    activity_date = parts[0] if parts else "Неизвестно"
+                else:
+                    activity_date = str(first_activity)
+        else:
+            activity_date = "Неизвестно"
+
+        # Добавляем информацию о пользователе в сообщение
+        user_info = f"👤 {idx}. {user_name} {username_display}"
+        if username_display == "":
+            user_info = f"👤 {idx}. {user_name}"
+
+        stats_message += f"{user_info} — {activity_date}\n"
+
+        # Если сообщение становится слишком длинным, отправляем его и начинаем новое
+        if len(stats_message) > 3500:
+            bot.send_message(admin_id, stats_message)
+            stats_message = ""
+
+    # Отправляем оставшуюся часть сообщения
+    if stats_message:
+        bot.send_message(admin_id, stats_message)
+
+    # Отправляем общую статистику
+    total_stats = (
+        f"📈 *Общая статистика*\n\n"
+        f"👥 Всего пользователей: {len(users)}\n"
+        f"🔢 Всего расчётов: {sum(user.get('calc_count', 0) or 0 for user in users)}\n"
+        f"📝 С подпиской: {sum(1 for user in users if user.get('subscription'))}"
+    )
+
+    bot.send_message(admin_id, total_stats, parse_mode="Markdown")
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("update_status_"))
 def update_order_status(call):
     manager_id = call.message.chat.id
@@ -837,19 +707,6 @@ def update_order_status(call):
         )
 
     bot.send_message(manager_id, "📌 Выберите новый статус:", reply_markup=keyboard)
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("delete_car_"))
-def delete_favorite_callback(call):
-    user_id = call.message.chat.id
-    car_id = call.data.split("_")[2]  # Получаем ID авто
-
-    delete_favorite_car(user_id, car_id)  # Удаляем авто из БД
-
-    bot.answer_callback_query(call.id, "✅ Авто удалено из списка!")
-    bot.delete_message(
-        call.message.chat.id, call.message.message_id
-    )  # Удаляем сообщение с авто
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("delete_order_"))
@@ -1022,14 +879,11 @@ def print_message(message):
 
 # Функция для установки команд меню
 def set_bot_commands():
-    """Устанавливает команды бота."""
     commands = [
         types.BotCommand("start", "Запустить бота"),
         types.BotCommand("exchange_rates", "Курсы валют"),
         types.BotCommand("my_cars", "Мои избранные автомобили"),
         types.BotCommand("orders", "Список заказов (Для менеджеров)"),
-        types.BotCommand("stats", "Статистика (для менеджеров)"),
-        types.BotCommand("set_usdt_rate", "Установить курс USDT (для менеджеров)"),
     ]
 
     # Проверяем, является ли пользователь менеджером
@@ -1038,6 +892,7 @@ def set_bot_commands():
         commands.extend(
             [
                 types.BotCommand("orders", "Просмотр всех заказов (для менеджеров)"),
+                types.BotCommand("stats", "Статистика пользователей"),
             ]
         )
 
@@ -1047,81 +902,18 @@ def set_bot_commands():
 def get_usdt_to_krw_rate():
     global usdt_to_krw_rate
 
-    # Сначала проверяем, есть ли курс в базе данных
-    db_rate = get_usdt_krw_rate_from_db()
-    if db_rate:
-        # Используем курс из базы данных, если он был установлен менеджером
-        usdt_to_krw_rate = db_rate["rate_value"]
-        print(
-            f"Курс USDT к KRW из БД -> {usdt_to_krw_rate} (установлен: {db_rate['updated_at']})"
-        )
-        return usdt_to_krw_rate
+    # URL для получения курса USDT к KRW
+    url = "https://api.coinbase.com/v2/exchange-rates?currency=USDT"
+    response = requests.get(url)
+    data = response.json()
 
-    # Если в базе нет курса, получаем из API
-    # URL для получения курса USDT к KRW от NAVER
-    url = "https://m.stock.naver.com/front-api/realTime/crypto"
+    # Извлечение курса KRW
+    krw_rate = data["data"]["rates"]["KRW"]
+    usdt_to_krw_rate = float(krw_rate)
 
-    # Headers и cookies для NAVER API
-    cookies = {
-        "NAC": "2QfGCIBudkAvB",
-        "NNB": "5VYPEL22ENFGQ",
-        "_naver_usersession_": "fo11wAsIguwpgB3NPgxlng==",
-        "SRT30": "1752901307",
-        "SRT5": "1752901307",
-        "page_uid": "jcVFZlqptbNssCq2SA0ssssstmo-042991",
-        "BUC": "YxFFeGb7WKKpPsaFnPzdYRByVimsTwvDlcZUcJ5oBKg=",
-    }
+    print(f"Курс USDT к KRW -> {str(usdt_to_krw_rate)}")
 
-    headers = {
-        "accept": "application/json, text/plain, */*",
-        "accept-language": "en,ru;q=0.9,en-CA;q=0.8,la;q=0.7,fr;q=0.6,ko;q=0.5",
-        "content-type": "application/json",
-        "origin": "https://m.stock.naver.com",
-        "priority": "u=1, i",
-        "referer": "https://m.stock.naver.com/crypto/UPBIT/USDT",
-        "sec-ch-ua": '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"macOS"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
-    }
-
-    json_data = {
-        "fqnfTickers": [
-            "USDT_KRW_UPBIT",
-            "USDT_KRW_BITHUMB",
-        ],
-    }
-
-    try:
-        response = requests.post(url, cookies=cookies, headers=headers, json=json_data)
-        response.raise_for_status()  # Проверяем успешность запроса
-        data = response.json()
-
-        # Извлекаем курс USDT к KRW из ответа NAVER (используем UPBIT)
-        trade_price = data["result"]["USDT_KRW_UPBIT"]["tradePrice"]
-
-        # Вычитаем 25 из курса как указано в требованиях
-        usdt_to_krw_rate = float(trade_price) - 25
-
-        print(
-            f"Курс USDT к KRW (NAVER) -> {usdt_to_krw_rate} (исходный: {trade_price})"
-        )
-
-        return usdt_to_krw_rate
-
-    except requests.RequestException as e:
-        print(f"Ошибка при получении курса USDT к KRW от NAVER: {e}")
-        # Возвращаем значение по умолчанию в случае ошибки
-        usdt_to_krw_rate = 1343.5  # Примерное значение по умолчанию (1368.5 - 25)
-        return usdt_to_krw_rate
-    except (KeyError, TypeError) as e:
-        print(f"Ошибка при разборе ответа NAVER API: {e}")
-        # Возвращаем значение по умолчанию в случае ошибки парсинга
-        usdt_to_krw_rate = 1343.5
-        return usdt_to_krw_rate
+    return float(krw_rate) + 8
 
 
 def get_rub_to_krw_rate():
@@ -1236,7 +1028,7 @@ def main_menu():
     keyboard.add(
         types.KeyboardButton(CALCULATE_CAR_TEXT),
         types.KeyboardButton("Ручной расчёт"),
-        types.KeyboardButton("Заказ запчастей"),
+        # types.KeyboardButton("Заказ запчастей"),
     )
     keyboard.add(
         types.KeyboardButton("Написать менеджеру"),
@@ -1244,7 +1036,7 @@ def main_menu():
         types.KeyboardButton("Telegram-канал"),
         # types.KeyboardButton("Написать в WhatsApp"),
         types.KeyboardButton("Instagram"),
-        # types.KeyboardButton("Tik-Tok"),
+        types.KeyboardButton("ВКонтакте"),
         # types.KeyboardButton("Facebook"),
     )
     return keyboard
@@ -1256,28 +1048,31 @@ def send_welcome(message):
     get_currency_rates()
 
     user_first_name = message.from_user.first_name
+
+    # Добавляем пользователя в базу данных
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
+
     welcome_message = (
         f"Здравствуйте, {user_first_name}!\n\n"
-        "Я бот компании AK Motors. Я помогу вам рассчитать стоимость понравившегося вам автомобиля из Южной Кореи до стран СНГ.\n\n"
+        "Я бот компании DeyTrading. Я помогу вам рассчитать стоимость понравившегося вам автомобиля из Южной Кореи до стран СНГ.\n\n"
         "Выберите действие из меню ниже."
     )
 
     # Логотип компании
-    logo_path = "assets/logo.jpeg"
+    logo_path = "assets/logo.png"
 
     with open(logo_path, "rb") as logo_file:
         bot.send_photo(
             message.chat.id,
             photo=types.InputFile(logo_file),
         )
-
-    # Добавляем пользователя в базу данных
-    add_user(
-        message.from_user.id,
-        message.from_user.username,
-        message.from_user.first_name,
-        message.from_user.last_name,
-    )
 
     # Отправляем приветственное сообщение
     bot.send_message(message.chat.id, welcome_message, reply_markup=main_menu())
@@ -1430,6 +1225,26 @@ def get_car_info(url):
             else:
                 print("❌ Таблица информации не найдена")
 
+            # Если объем двигателя не найден или равен 0, пытаемся извлечь из названия
+            if not car_engine_displacement or car_engine_displacement == "0cc":
+                # Ищем числа с точкой (например, 2.0) в названии автомобиля
+                engine_match = re.search(r"(\d+\.\d+)", car_name)
+                if engine_match:
+                    # Преобразуем, например, 2.0 в 2000cc
+                    engine_size = float(engine_match.group(1))
+                    car_engine_displacement = f"{int(engine_size * 1000)}cc"
+                    print(
+                        f"✅ Извлечен объем двигателя из названия: {car_engine_displacement}"
+                    )
+                else:
+                    # Ищем просто числа (например, 2000) в названии
+                    engine_match = re.search(r"(\d{3,4})", car_name)
+                    if engine_match and 500 <= int(engine_match.group(1)) <= 9000:
+                        car_engine_displacement = f"{engine_match.group(1)}cc"
+                        print(
+                            f"✅ Извлечен объем двигателя из названия: {car_engine_displacement}"
+                        )
+
             car_info = {
                 "name": car_name,
                 "car_price": car_price,
@@ -1569,17 +1384,17 @@ def get_car_info(url):
 def calculate_cost(link, message):
     global car_data, car_id_external, car_month, car_year, krw_rub_rate, eur_rub_rate, rub_to_krw_rate, usd_rate, usdt_to_krw_rate
 
-    get_currency_rates()
-    get_rub_to_krw_rate()
-    get_usdt_to_krw_rate()
-
     user_id = message.chat.id
 
-    bot.send_message(
-        message.chat.id,
-        "✅ Подгружаю актуальный курс валют и делаю расчёты. ⏳ Пожалуйста подождите...",
-        parse_mode="Markdown",
-    )
+    # Добавляем пользователя в базу данных
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
 
     # Если пользователь в списке FREE_ACCESS_USERS, он получает бесконечные расчёты
     if user_id in FREE_ACCESS_USERS:
@@ -1621,7 +1436,9 @@ def calculate_cost(link, message):
     print_message("ЗАПРОС НА РАСЧЁТ АВТОМОБИЛЯ")
 
     # Отправляем сообщение и сохраняем его ID
-    processing_message = bot.send_message(message.chat.id, "Обрабатываю данные... ⏳")
+    processing_message = bot.send_message(
+        message.chat.id, "Обрабатываю данные. Пожалуйста подождите ⏳"
+    )
 
     car_id = None
     car_title = ""
@@ -1639,10 +1456,10 @@ def calculate_cost(link, message):
     elif "kbchachacha.com" in link or "m.kbchachacha.com" in link:
         parsed_url = urlparse(link)
         query_params = parse_qs(parsed_url.query)
-        
+
         # Попытка 1: обычный carSeq в параметрах
         car_id = query_params.get("carSeq", [None])[0]
-        
+
         # Попытка 2: если есть параметр `c=...`, надо выполнить редирект
         if not car_id and query_params.get("c"):
             try:
@@ -1662,7 +1479,7 @@ def calculate_cost(link, message):
             send_error_message(message, "🚫 Не удалось извлечь carSeq из ссылки.")
             return
 
-    elif "web.chutcha.net" in link or "chutcha" in link:
+    elif "web.chutcha.net" in link:
         parsed_url = urlparse(link)
         path_parts = parsed_url.path.split("/")
 
@@ -1769,7 +1586,9 @@ def calculate_cost(link, message):
     if not car_price and car_engine_displacement and formatted_car_date:
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(
-            types.InlineKeyboardButton("Написать менеджеру", url="https://t.me/timyo97")
+            types.InlineKeyboardButton(
+                "Написать менеджеру", url="https://t.me/DeyTrading6"
+            )
         )
         keyboard.add(
             types.InlineKeyboardButton(
@@ -1807,6 +1626,11 @@ def calculate_cost(link, message):
         price_usd = price_krw / usd_to_krw_rate
         price_rub = price_usd * usd_to_rub_rate
 
+        print(car_engine_displacement)
+        print(price_krw)
+        print(int(formatted_car_year))
+        print(car_month)
+
         response = get_customs_fees(
             car_engine_displacement,
             price_krw,
@@ -1821,78 +1645,52 @@ def calculate_cost(link, message):
         recycling_fee = clean_number(response["util"])
 
         # Расчет итоговой стоимости автомобиля в рублях
-        # Под ключ до Владивостока
-        total_cost_vladivostok = (
-            price_rub
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-        )
-
-        total_cost_krw_vladivostok = price_krw + 1400000 + 1400000 + 440000
-
-        total_cost_usd_vladivostok = (
-            price_usd
-            + (1400000 / usd_to_krw_rate)
-            + (1400000 / usd_to_krw_rate)
-            + (440000 / usd_to_krw_rate)
-        )
-
-        # Полный расчёт до МСК
         total_cost = (
             price_rub
             + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((300000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + 120000
+            + 100000
             + customs_fee
             + customs_duty
             + recycling_fee
             + 13000
-            + 230000
+            + 200000
         )
 
         total_cost_krw = (
             price_krw
-            + 1400000
-            + 1400000
+            + 300000
             + 440000
-            + (120000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (1400000 / usd_to_krw_rate)
+            + (100000 / usd_to_rub_rate) * usd_to_krw_rate
             + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
             + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
             + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
             + (13000 / usd_to_rub_rate) * usd_to_krw_rate
-            + (230000 / usd_to_rub_rate) * usd_to_krw_rate
+            + (200000 / usd_to_rub_rate) * usd_to_krw_rate
         )
 
         total_cost_usd = (
             price_usd
             + (1400000 / usd_to_krw_rate)
-            + (1400000 / usd_to_krw_rate)
+            + (300000 / usd_to_krw_rate)
             + (440000 / usd_to_krw_rate)
-            + (120000 / usd_to_rub_rate)
+            + (100000 / usd_to_rub_rate)
             + (customs_fee / usd_to_rub_rate)
             + (customs_duty / usd_to_rub_rate)
             + (recycling_fee / usd_to_rub_rate)
             + (13000 / usd_to_rub_rate)
-            + (230000 / usd_to_rub_rate)
+            + (200000 / usd_to_rub_rate)
         )
 
         car_data["total_cost_usd"] = total_cost_usd
         car_data["total_cost_krw"] = total_cost_krw
         car_data["total_cost_rub"] = total_cost
 
-        car_data["company_fees_usd"] = 1400000 / usd_to_krw_rate
-        car_data["company_fees_krw"] = 1400000
-        car_data["company_fees_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
-
-        car_data["agent_korea_rub"] = 50000
-        car_data["agent_korea_usd"] = 50000 / usd_to_rub_rate
-        car_data["agent_korea_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
-
-        car_data["advance_rub"] = (1000000 / usd_to_krw_rate) * usd_to_rub_rate
-        car_data["advance_usd"] = 1000000 * usd_to_krw_rate
-        car_data["advance_krw"] = 1000000
+        car_data["company_fees_usd"] = 0
+        car_data["company_fees_krw"] = 0
+        car_data["company_fees_rub"] = 0
 
         car_data["car_price_krw"] = price_krw
         car_data["car_price_usd"] = price_usd
@@ -1910,9 +1708,9 @@ def calculate_cost(link, message):
         car_data["transfer_korea_krw"] = 350000
         car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["freight_korea_usd"] = 1400000 / usd_to_krw_rate
-        car_data["freight_korea_krw"] = 1400000
-        car_data["freight_korea_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["freight_korea_usd"] = 300000 / usd_to_krw_rate
+        car_data["freight_korea_krw"] = 300000
+        car_data["freight_korea_rub"] = (300000 / usd_to_krw_rate) * usd_to_rub_rate
 
         car_data["korea_total_usd"] = (
             (50000 / usd_to_rub_rate)
@@ -1963,6 +1761,12 @@ def calculate_cost(link, message):
             + (600 * usd_to_rub_rate)
         )
 
+        car_data["vladivostok_parom_krw"] = 1400000
+        car_data["vladivostok_parom_usd"] = 1400000 / usd_to_krw_rate
+        car_data["vladivostok_parom_rub"] = (
+            1400000 / usd_to_krw_rate
+        ) * usd_to_rub_rate
+
         # Расходы Россия
         car_data["customs_duty_usd"] = customs_duty / usd_to_rub_rate
         car_data["customs_duty_krw"] = (
@@ -1978,15 +1782,15 @@ def calculate_cost(link, message):
         car_data["util_fee_krw"] = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
         car_data["util_fee_rub"] = recycling_fee
 
-        car_data["broker_russia_usd"] = 120000 / usd_to_rub_rate
-        car_data["broker_russia_krw"] = (120000 / usd_to_rub_rate) * usd_to_krw_rate
-        car_data["broker_russia_rub"] = 120000
+        car_data["broker_russia_usd"] = 100000 / usd_to_rub_rate
+        car_data["broker_russia_krw"] = (100000 / usd_to_rub_rate) * usd_to_krw_rate
+        car_data["broker_russia_rub"] = 100000
 
-        car_data["moscow_transporter_usd"] = 230000 / usd_to_rub_rate
+        car_data["moscow_transporter_usd"] = 200000 / usd_to_rub_rate
         car_data["moscow_transporter_krw"] = (
-            230000 / usd_to_rub_rate
+            200000 / usd_to_rub_rate
         ) * usd_to_krw_rate
-        car_data["moscow_transporter_rub"] = 230000
+        car_data["moscow_transporter_rub"] = 200000
 
         car_data["vladivostok_transfer_usd"] = 13000 / usd_to_rub_rate
         car_data["vladivostok_transfer_krw"] = (
@@ -2059,15 +1863,14 @@ def calculate_cost(link, message):
             f"Объём двигателя: {engine_volume_formatted}\n"
             f"КПП: {formatted_transmission}\n\n"
             f"Стоимость автомобиля в Корее: ₩{format_number(price_krw)}\n"
-            f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd_vladivostok)} </b> | <b>₩{format_number(total_cost_krw_vladivostok)} </b> | <b>{format_number(total_cost_vladivostok)} ₽</b>\n\n"
+            f"Стоимость автомобиля под ключ до Владивостока: \n<b>${format_number(total_cost_usd)} </b> | <b>₩{format_number(total_cost_krw)} </b> | <b>{format_number(total_cost)} ₽</b>\n\n"
             f"{car_insurance_payments_chutcha}"
             f"💵 <b>Курс USDT к Воне: ₩{format_number(usdt_to_krw_rate)}</b>\n\n"
             f"🔗 <a href='{preview_link}'>Ссылка на автомобиль</a>\n\n"
             "Если данное авто попадает под санкции, пожалуйста уточните возможность отправки в вашу страну у наших менеджеров:\n\n"
-            f"▪️ +82-10-2934-8855 (Артур)\n"
-            f"▪️ +82-10-5528-0997 (Тимур)\n"
+            f"▪️ +82-10-8855-0386 (Андрей)\n"
             # f"▪️ +82 10-5128-8082 (Александр) \n\n"
-            "🔗 <a href='https://t.me/akmotors96'>Официальный телеграм канал</a>\n"
+            "🔗 <a href='https://t.me/dey_trading'>Официальный телеграм канал</a>\n"
         )
 
         # Клавиатура с дальнейшими действиями
@@ -2097,7 +1900,9 @@ def calculate_cost(link, message):
                 )
             )
         keyboard.add(
-            types.InlineKeyboardButton("Написать менеджеру", url="https://t.me/timyo97")
+            types.InlineKeyboardButton(
+                "Написать менеджеру", url="https://t.me/DeyTrading6"
+            )
         )
         keyboard.add(
             types.InlineKeyboardButton(
@@ -2335,11 +2140,12 @@ def handle_callback_query(call):
         detail_message = (
             f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
             f"Стоимость автомобиля:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
-            f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(car_data['company_fees_usd'])}</b> | <b>₩{format_number(car_data['company_fees_krw'])}</b> | <b>{format_number(car_data['company_fees_rub'])} ₽</b>\n\n"
-            f"Фрахт (отправка в порт, доставка автомобиля на базу, оплата судна):\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
-            f"Дилерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
+            f"Услуги фирмы (поиск и подбор авто, документация, 2 осмотра):\n<b>$0</b> | <b>₩0</b> | <b>0 ₽</b>\n\n"
+            f"Фрахт (доставка автомобиля на базу, оплата судна):\n${format_number(car_data['vladivostok_parom_usd'])} | ₩{format_number(car_data['vladivostok_parom_krw'])} | {format_number(car_data['vladivostok_parom_rub'])} ₽\n\n"
+            f"Доставка до порта г. Пусан:\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
+            f"Диллерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
             f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
-            f"Брокер-Владивосток:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n\n"
+            f"Декларант:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n\n"
             f"Единая таможенная ставка:\n<b>${format_number(car_data['customs_duty_usd'])}</b> | <b>₩{format_number(car_data['customs_duty_krw'])}</b> | <b>{format_number(car_data['customs_duty_rub'])} ₽</b>\n\n"
             f"Таможенное оформление:\n<b>${format_number(car_data['customs_fee_usd'])}</b> | <b>₩{format_number(car_data['customs_fee_krw'])}</b> | <b>{format_number(car_data['customs_fee_rub'])} ₽</b>\n\n"
             f"Утилизационный сбор:\n<b>${format_number(car_data['util_fee_usd'])}</b> | <b>₩{format_number(car_data['util_fee_krw'])}</b> | <b>{format_number(car_data['util_fee_rub'])} ₽</b>\n\n\n"
@@ -2347,8 +2153,7 @@ def handle_callback_query(call):
             f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
             f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
             f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-            f"▪️ +82-10-2934-8855 (Артур)\n"
-            f"▪️ +82-10-5528-0997 (Тимур)\n"
+            f"▪️ +82-10-8855-0386 (Андрей)\n"
             # f"▪️ +82 10-5128-8082 (Александр)\n\n"
         )
 
@@ -2403,7 +2208,7 @@ def handle_callback_query(call):
         )
         # keyboard.add(
         #     types.InlineKeyboardButton(
-        #         "Связаться с менеджером", url="https://t.me/timyo97"
+        #         "Связаться с менеджером", url="https://t.me/DeyTrading6"
         #     )
         # )
 
@@ -2447,7 +2252,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/timyo97"
+                    "Связаться с менеджером", url="https://t.me/DeyTrading6"
                 )
             )
 
@@ -2483,7 +2288,7 @@ def handle_callback_query(call):
             )
             keyboard.add(
                 types.InlineKeyboardButton(
-                    "Связаться с менеджером", url="https://t.me/timyo97"
+                    "Связаться с менеджером", url="https://t.me/DeyTrading6"
                 )
             )
             keyboard.add(
@@ -2516,6 +2321,7 @@ def handle_callback_query(call):
 
 def process_car_age(message):
     user_input = message.text.strip()
+    user_id = message.chat.id
 
     # Проверяем ввод
     age_mapping = {
@@ -2529,8 +2335,12 @@ def process_car_age(message):
         bot.send_message(message.chat.id, "Пожалуйста, выберите возраст из списка.")
         return
 
+    # Инициализируем словарь для пользователя, если его нет
+    if user_id not in user_data:
+        user_data[user_id] = {}
+
     # Сохраняем возраст авто
-    user_data[message.chat.id] = {"car_age": age_mapping[user_input]}
+    user_data[user_id]["car_age"] = age_mapping[user_input]
 
     # Запрашиваем объем двигателя
     bot.send_message(
@@ -2566,6 +2376,17 @@ def process_car_price(message):
     global usd_to_krw_rate, usd_to_rub_rate
 
     user_input = message.text.strip()
+    user_id = message.chat.id
+
+    # Добавляем пользователя в базу данных
+    user_data_db = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data_db)
 
     # Проверяем, что введено число
     if not user_input.isdigit():
@@ -2576,129 +2397,262 @@ def process_car_price(message):
         bot.register_next_step_handler(message, process_car_price)
         return
 
+    # Инициализируем словарь для пользователя, если его нет
+    if user_id not in user_data:
+        user_data[user_id] = {}
+
+    # Проверяем, есть ли нужные ключи
+    if "car_age" not in user_data[user_id] or "engine_volume" not in user_data[user_id]:
+        bot.send_message(
+            message.chat.id,
+            "Произошла ошибка. Пожалуйста, начните расчёт заново, выбрав 'Ручной расчёт' из меню.",
+        )
+        return
+
     # Сохраняем стоимость автомобиля
-    user_data[message.chat.id]["car_price_krw"] = int(user_input)
+    user_data[user_id]["car_price_krw"] = int(user_input)
 
     # Извлекаем данные пользователя
     if message.chat.id not in user_data:
         user_data[message.chat.id] = {}
 
-    if "car_age" not in user_data[message.chat.id]:
-        bot.send_message(message.chat.id, "Произошла ошибка, попробуйте снова.")
-        return  # Прерываем выполнение, если возраст не установлен
-
-    age_group = user_data[message.chat.id]["car_age"]
-    engine_volume = user_data[message.chat.id]["engine_volume"]
-    car_price_krw = user_data[message.chat.id]["car_price_krw"]
+    age_group = user_data[user_id]["car_age"]
+    engine_volume = user_data[user_id]["engine_volume"]
+    car_price_krw = user_data[user_id]["car_price_krw"]
 
     # Конвертируем стоимость автомобиля в USD и RUB
-    price_usd = car_price_krw / usd_to_krw_rate
+    price_krw = int(car_price_krw)
+    price_usd = price_krw / usd_to_krw_rate
     price_rub = price_usd * usd_to_rub_rate
 
-    # Рассчитываем таможенные платежи
-    customs_fees = get_customs_fees_manual(engine_volume, car_price_krw, age_group)
+    response = get_customs_fees_manual(
+        engine_volume,
+        price_krw,
+        age_group,
+        engine_type=1,
+    )
 
-    customs_duty = clean_number(customs_fees["tax"])  # Таможенная пошлина
-    customs_fee = clean_number(customs_fees["sbor"])  # Таможенный сбор
-    recycling_fee = clean_number(customs_fees["util"])  # Утилизационный сбор
+    # Таможенный сбор
+    customs_fee = clean_number(response["sbor"])
+    customs_duty = clean_number(response["tax"])
+    recycling_fee = clean_number(response["util"])
 
     # Расчет итоговой стоимости автомобиля в рублях
-    total_cost_rub = (
+    total_cost = (
         price_rub
         + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-        + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((300000 / usd_to_krw_rate) * usd_to_rub_rate)
         + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
-        + 120000
+        + 100000
         + customs_fee
         + customs_duty
         + recycling_fee
         + 13000
-        + 230000
+        + 200000
     )
 
     total_cost_krw = (
-        car_price_krw
-        + 1400000
-        + 1400000
+        price_krw
+        + 300000
         + 440000
-        + (120000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (1400000 / usd_to_krw_rate)
+        + (100000 / usd_to_rub_rate) * usd_to_krw_rate
         + (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
         + (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
         + (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
         + (13000 / usd_to_rub_rate) * usd_to_krw_rate
-        + (230000 / usd_to_rub_rate) * usd_to_krw_rate
+        + (200000 / usd_to_rub_rate) * usd_to_krw_rate
     )
 
     total_cost_usd = (
         price_usd
         + (1400000 / usd_to_krw_rate)
-        + (1400000 / usd_to_krw_rate)
+        + (300000 / usd_to_krw_rate)
         + (440000 / usd_to_krw_rate)
-        + (120000 / usd_to_rub_rate)
+        + (100000 / usd_to_rub_rate)
         + (customs_fee / usd_to_rub_rate)
         + (customs_duty / usd_to_rub_rate)
         + (recycling_fee / usd_to_rub_rate)
         + (13000 / usd_to_rub_rate)
-        + (230000 / usd_to_rub_rate)
+        + (200000 / usd_to_rub_rate)
     )
 
-    company_fees_krw = 1400000
-    company_fees_usd = 1400000 / usdt_to_krw_rate
-    company_fees_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+    car_data["total_cost_usd"] = total_cost_usd
+    car_data["total_cost_krw"] = total_cost_krw
+    car_data["total_cost_rub"] = total_cost
 
-    freight_korea_krw = 1400000
-    freight_korea_usd = 1400000 / usd_to_krw_rate
-    freight_korea_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+    car_data["company_fees_usd"] = 0
+    car_data["company_fees_krw"] = 0
+    car_data["company_fees_rub"] = 0
 
-    dealer_korea_krw = 440000
-    dealer_korea_usd = 440000 / usd_to_krw_rate
-    dealer_korea_rub = (440000 / usd_to_krw_rate) * usd_to_rub_rate
+    car_data["car_price_krw"] = price_krw
+    car_data["car_price_usd"] = price_usd
+    car_data["car_price_rub"] = price_rub
 
-    broker_russia_rub = 120000
-    broker_russia_usd = 120000 / usd_to_rub_rate
-    broker_russia_krw = (120000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["dealer_korea_usd"] = 440000 / usd_to_krw_rate
+    car_data["dealer_korea_krw"] = 440000
+    car_data["dealer_korea_rub"] = (440000 / usd_to_krw_rate) * usd_to_rub_rate
 
-    customs_duty_rub = customs_duty
-    customs_duty_usd = customs_duty / usd_to_rub_rate
-    customs_duty_krw = (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["delivery_korea_usd"] = 100000 / usd_to_krw_rate
+    car_data["delivery_korea_krw"] = 100000
+    car_data["delivery_korea_rub"] = (100000 / usd_to_krw_rate) * usd_to_rub_rate
 
-    customs_fee_rub = customs_fee
-    customs_fee_usd = customs_fee / usd_to_rub_rate
-    customs_fee_krw = (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["transfer_korea_usd"] = 350000 / usd_to_krw_rate
+    car_data["transfer_korea_krw"] = 350000
+    car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
-    util_fee_rub = recycling_fee
-    util_fee_usd = recycling_fee / usd_to_rub_rate
-    util_fee_krw = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["freight_korea_usd"] = 300000 / usd_to_krw_rate
+    car_data["freight_korea_krw"] = 300000
+    car_data["freight_korea_rub"] = (300000 / usd_to_krw_rate) * usd_to_rub_rate
 
-    vladivostok_transfer_rub = 13000
-    vladivostok_transfer_usd = 13000 / usd_to_rub_rate
-    vladivostok_transfer_krw = (13000 / usd_to_rub_rate) * usdt_to_krw_rate
+    car_data["korea_total_usd"] = (
+        (50000 / usd_to_rub_rate)
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_krw_rate)
+        + (350000 / usd_to_krw_rate)
+        + (600)
+    )
 
-    moscow_transporter_rub = 230000
-    moscow_transporter_usd = 230000 / usd_to_rub_rate
-    moscow_transporter_krw = (230000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["korea_total_krw"] = (
+        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + (440000)
+        + (100000)
+        + 350000
+        + (600 * usd_to_krw_rate)
+    )
+
+    car_data["korea_total_rub"] = (
+        (50000)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + (600 * usd_to_rub_rate)
+    )
+
+    car_data["korea_total_plus_car_usd"] = (
+        (50000 / usd_to_rub_rate)
+        + (price_usd)
+        + (440000 / usd_to_krw_rate)
+        + (100000 / usd_to_krw_rate)
+        + (350000 / usd_to_krw_rate)
+        + (600)
+    )
+    car_data["korea_total_plus_car_krw"] = (
+        ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + (price_krw)
+        + (440000)
+        + (100000)
+        + 350000
+        + (600 * usd_to_krw_rate)
+    )
+    car_data["korea_total_plus_car_rub"] = (
+        (50000)
+        + (price_rub)
+        + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
+        + (600 * usd_to_rub_rate)
+    )
+
+    car_data["vladivostok_parom_krw"] = 1400000
+    car_data["vladivostok_parom_usd"] = 1400000 / usd_to_krw_rate
+    car_data["vladivostok_parom_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+
+    # Расходы Россия
+    car_data["customs_duty_usd"] = customs_duty / usd_to_rub_rate
+    car_data["customs_duty_krw"] = (customs_duty / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["customs_duty_rub"] = customs_duty
+
+    car_data["customs_fee_usd"] = customs_fee / usd_to_rub_rate
+    car_data["customs_fee_krw"] = (customs_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["customs_fee_rub"] = customs_fee
+
+    car_data["util_fee_usd"] = recycling_fee / usd_to_rub_rate
+    car_data["util_fee_krw"] = (recycling_fee / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["util_fee_rub"] = recycling_fee
+
+    car_data["broker_russia_usd"] = 100000 / usd_to_rub_rate
+    car_data["broker_russia_krw"] = (100000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["broker_russia_rub"] = 100000
+
+    car_data["moscow_transporter_usd"] = 200000 / usd_to_rub_rate
+    car_data["moscow_transporter_krw"] = (200000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["moscow_transporter_rub"] = 200000
+
+    car_data["vladivostok_transfer_usd"] = 13000 / usd_to_rub_rate
+    car_data["vladivostok_transfer_krw"] = (13000 / usd_to_rub_rate) * usdt_to_krw_rate
+    car_data["vladivostok_transfer_rub"] = 13000
+
+    car_data["svh_russia_usd"] = 50000 / usd_to_rub_rate
+    car_data["svh_russia_krw"] = (50000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["svh_russia_rub"] = 50000
+
+    car_data["lab_russia_usd"] = 30000 / usd_to_rub_rate
+    car_data["lab_russia_krw"] = (30000 / usd_to_rub_rate) * usd_to_krw_rate
+    car_data["lab_russia_rub"] = 30000
+
+    car_data["perm_registration_russia_usd"] = 8000 / usd_to_rub_rate
+    car_data["perm_registration_russia_krw"] = (
+        8000 / usd_to_rub_rate
+    ) * usd_to_krw_rate
+    car_data["perm_registration_russia_rub"] = 8000
+
+    car_data["russia_total_usd"] = (
+        (customs_duty / usd_to_rub_rate)
+        + (customs_fee / usd_to_rub_rate)
+        + (recycling_fee / usd_to_rub_rate)
+        + (346)
+        + (50000 / usd_to_rub_rate)
+        + (8000 / usd_to_rub_rate)
+    )
+    car_data["russia_total_krw"] = (
+        ((customs_duty / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((customs_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((recycling_fee / usd_to_rub_rate) * usd_to_krw_rate)
+        + (346 * usd_to_krw_rate)
+        + ((50000 / usd_to_rub_rate) * usd_to_krw_rate)
+        + ((8000 / usd_to_rub_rate) * usd_to_krw_rate)
+    )
+    car_data["russia_total_rub"] = (
+        customs_duty
+        + customs_fee
+        + recycling_fee
+        + (346 * usd_to_rub_rate)
+        + 50000
+        + 8000
+    )
+
+    formatted_age_group = (
+        "До 3 лет"
+        if age_group == "0-3"
+        else (
+            "От 3 до 5 лет"
+            if age_group == "3-5"
+            else "От 5 до 7 лет" if age_group == "5-7" else "От 7 лет"
+        )
+    )
 
     # Формируем сообщение с расчетом стоимости
     result_message = (
         f"💰 <b>Расчёт стоимости автомобиля</b> 💰\n\n"
-        f"📌 Возраст автомобиля: <b>{age_group} лет</b>\n"
+        f"📌 Возраст автомобиля: <b>{formatted_age_group}</b>\n"
         f"🚗 Объём двигателя: <b>{format_number(engine_volume)} см³</b>\n\n"
         f"<i>ПЕРВАЯ ЧАСТЬ ОПЛАТЫ (КОРЕЯ)</i>:\n\n"
-        f"Стоимость автомобиля:\n<b>${format_number(price_usd)}</b> | <b>₩{format_number(car_price_krw)}</b> | <b>{format_number(price_rub)} ₽</b>\n\n"
-        f"Услуги фирмы (поиск и подбор авто, документация, 3 осмотра):\n<b>${format_number(company_fees_usd)}</b> | <b>₩{format_number(company_fees_krw)}</b> | <b>{format_number(company_fees_rub)} ₽</b>\n\n"
-        f"Фрахт (отправка в порт, доставка автомобиля на базу, оплата судна):\n<b>${format_number(freight_korea_usd)}</b> | <b>₩{format_number(freight_korea_krw)}</b> | <b>{format_number(freight_korea_rub)} ₽</b>\n\n\n"
-        f"Дилерский сбор:\n<b>${format_number(dealer_korea_usd)}</b> | <b>₩{format_number(dealer_korea_krw)}</b> | <b>{format_number(dealer_korea_rub)} ₽</b>\n\n"
+        f"Стоимость автомобиля:\n<b>${format_number(car_data['car_price_usd'])}</b> | <b>₩{format_number(car_data['car_price_krw'])}</b> | <b>{format_number(car_data['car_price_rub'])} ₽</b>\n\n"
+        f"Услуги фирмы (поиск и подбор авто, документация, 2 осмотра):\n<b>$0</b> | <b>₩0</b> | <b>0 ₽</b>\n\n"
+        f"Фрахт (доставка автомобиля на базу, оплата судна):\n${format_number(car_data['vladivostok_parom_usd'])} | ₩{format_number(car_data['vladivostok_parom_krw'])} | {format_number(car_data['vladivostok_parom_rub'])} ₽\n\n"
+        f"Доставка до порта г. Пусан:\n<b>${format_number(car_data['freight_korea_usd'])}</b> | <b>₩{format_number(car_data['freight_korea_krw'])}</b> | <b>{format_number(car_data['freight_korea_rub'])} ₽</b>\n\n\n"
+        f"Диллерский сбор:\n<b>${format_number(car_data['dealer_korea_usd'])}</b> | <b>₩{format_number(car_data['dealer_korea_krw'])}</b> | <b>{format_number(car_data['dealer_korea_rub'])} ₽</b>\n\n"
         f"<i>ВТОРАЯ ЧАСТЬ ОПЛАТЫ (РОССИЯ)</i>:\n\n"
-        f"Брокер-Владивосток:\n<b>${format_number(broker_russia_usd)}</b> | <b>₩{format_number(broker_russia_krw)}</b> | <b>{format_number(broker_russia_rub)} ₽</b>\n\n\n"
-        f"Единая таможенная ставка:\n<b>${format_number(customs_duty_usd)}</b> | <b>₩{format_number(customs_duty_krw)}</b> | <b>{format_number(customs_duty_rub)} ₽</b>\n\n"
-        f"Утилизационный сбор:\n<b>${format_number(util_fee_usd)}</b> | <b>₩{format_number(util_fee_krw)}</b> | <b>{format_number(util_fee_rub)} ₽</b>\n\n\n"
-        f"Таможенное оформление:\n<b>${format_number(customs_fee_usd)}</b> | <b>₩{format_number(customs_fee_krw)}</b> | <b>{format_number(customs_fee_rub)} ₽</b>\n\n"
-        f"Перегон во Владивостоке:\n<b>${format_number(vladivostok_transfer_usd)}</b> | <b>₩{format_number(vladivostok_transfer_krw)}</b> | <b>{format_number(vladivostok_transfer_rub)} ₽</b>\n\n"
-        f"Автовоз до Москвы:\n<b>${format_number(moscow_transporter_usd)}</b> | <b>₩{format_number(moscow_transporter_krw)}</b> | <b>{format_number(moscow_transporter_rub)} ₽</b>\n\n"
-        f"Итого под ключ: \n<b>${format_number(total_cost_usd)}</b> | <b>₩{format_number(total_cost_krw)}</b> | <b>{format_number(total_cost_rub)} ₽</b>\n\n"
+        f"Декларант:\n<b>${format_number(car_data['broker_russia_usd'])}</b> | <b>₩{format_number(car_data['broker_russia_krw'])}</b> | <b>{format_number(car_data['broker_russia_rub'])} ₽</b>\n\n\n"
+        f"Единая таможенная ставка:\n<b>${format_number(car_data['customs_duty_usd'])}</b> | <b>₩{format_number(car_data['customs_duty_krw'])}</b> | <b>{format_number(car_data['customs_duty_rub'])} ₽</b>\n\n"
+        f"Таможенное оформление:\n<b>${format_number(car_data['customs_fee_usd'])}</b> | <b>₩{format_number(car_data['customs_fee_krw'])}</b> | <b>{format_number(car_data['customs_fee_rub'])} ₽</b>\n\n"
+        f"Утилизационный сбор:\n<b>${format_number(car_data['util_fee_usd'])}</b> | <b>₩{format_number(car_data['util_fee_krw'])}</b> | <b>{format_number(car_data['util_fee_rub'])} ₽</b>\n\n\n"
+        f"Перегон во Владивостоке:\n<b>${format_number(car_data['vladivostok_transfer_usd'])}</b> | <b>₩{format_number(car_data['vladivostok_transfer_krw'])}</b> | <b>{format_number(car_data['vladivostok_transfer_rub'])} ₽</b>\n\n"
+        f"Автовоз до Москвы:\n<b>${format_number(car_data['moscow_transporter_usd'])}</b> | <b>₩{format_number(car_data['moscow_transporter_krw'])}</b> | <b>{format_number(car_data['moscow_transporter_rub'])} ₽</b>\n\n"
+        f"Итого под ключ: \n<b>${format_number(car_data['total_cost_usd'])}</b> | <b>₩{format_number(car_data['total_cost_krw'])}</b> | <b>{format_number(car_data['total_cost_rub'])} ₽</b>\n\n"
         f"<b>Доставку до вашего города уточняйте у менеджеров:</b>\n"
-        f"▪️ +82-10-2934-8855 (Артур)\n"
-        f"▪️ +82-10-5528-0997 (Тимур)\n"
+        f"▪️ +82-10-8855-0386 (Андрей)\n"
         # f"▪️ +82 10-5128-8082 (Александр)\n\n"
     )
 
@@ -2710,7 +2664,9 @@ def process_car_price(message):
         )
     )
     keyboard.add(
-        types.InlineKeyboardButton("Связаться с менеджером", url="https://t.me/timyo97")
+        types.InlineKeyboardButton(
+            "Связаться с менеджером", url="https://t.me/DeyTrading6"
+        )
     )
     keyboard.add(types.InlineKeyboardButton("Главное меню", callback_data="main_menu"))
 
@@ -2729,13 +2685,22 @@ def process_car_price(message):
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_message = message.text.strip()
-    user_id = message.from_user.id
+
+    # Добавляем пользователя в базу данных при каждом взаимодействии
+    user_data = {
+        "user_id": message.from_user.id,
+        "username": message.from_user.username,
+        "first_name": message.from_user.first_name,
+        "last_name": message.from_user.last_name,
+        "phone_number": user_contacts.get(message.from_user.id, None),
+    }
+    add_or_update_user(user_data)
 
     # Проверяем нажатие кнопки "Рассчитать автомобиль"
     if user_message == CALCULATE_CAR_TEXT:
         bot.send_message(
             message.chat.id,
-            "Пожалуйста, введите ссылку на автомобиль с одного из сайтов (encar.com, kbchachacha.com, chutcha.net):",
+            "Пожалуйста, введите ссылку на автомобиль с одного из сайтов (encar.com, kbchachacha.com, web.chutcha.net):",
         )
 
     elif user_message == "Ручной расчёт":
@@ -2769,10 +2734,7 @@ def handle_message(message):
     # Проверка на другие команды
     elif user_message == "Написать менеджеру":
         managers_list = [
-            {"name": "Ким Артур (Корея)", "whatsapp": "https://wa.me/821029348855"},
-            {"name": "Ким Артур (Россия)", "whatsapp": "https://wa.me/79999000070"},
-            {"name": "Тимур", "whatsapp": "https://wa.me/821055280997"},
-            # {"name": "Александр", "whatsapp": "https://wa.me/821051288082"},
+            {"name": "Андрей (Корея)", "whatsapp": "https://wa.me/821088550386"},
         ]
 
         # Формируем сообщение со списком менеджеров
@@ -2799,26 +2761,34 @@ def handle_message(message):
         bot.send_message(message.chat.id, message_text, parse_mode="Markdown")
 
     elif user_message == "О нас":
-        about_message = "AK Motors\nЮжнокорейская экспортная компания.\nСпециализируемся на поставках автомобилей из Южной Кореи в страны СНГ.\nОпыт работы более 5 лет.\n\nПочему выбирают нас?\n• Надежность и скорость доставки.\n• Индивидуальный подход к каждому клиенту.\n• Полное сопровождение сделки.\n\n💬 Ваш путь к надежным автомобилям начинается здесь!"
+        about_message = "Dey Trading\nЮжнокорейская экспортная компания.\nСпециализируемся на поставках автомобилей из Южной Кореи в страны СНГ.\nОпыт работы более 5 лет.\n\nПочему выбирают нас?\n• Надежность и скорость доставки.\n• Индивидуальный подход к каждому клиенту.\n• Полное сопровождение сделки.\n\n💬 Ваш путь к надежным автомобилям начинается здесь!"
         bot.send_message(message.chat.id, about_message)
 
     elif user_message == "Telegram-канал":
-        channel_link = "https://t.me/akmotors96"
+        channel_link = "https://t.me/dey_trading"
         bot.send_message(
             message.chat.id, f"Подписывайтесь на наш Telegram-канал: {channel_link}"
         )
     elif user_message == "Instagram":
-        instagram_link = "https://www.instagram.com/ak_motors_export"
+        instagram_link = "https://www.instagram.com/dey.trading"
         bot.send_message(
             message.chat.id,
             f"Посетите наш Instagram: {instagram_link}",
         )
     elif user_message == "Tik-Tok":
-        tiktok_link = "https://www.tiktok.com/@kpp_motors"
+        tiktok_link = "https://www.tiktok.com/@dey.trading6"
         bot.send_message(
             message.chat.id,
             f"Следите за свежим контентом на нашем TikTok: {tiktok_link}",
         )
+
+    elif user_message == "ВКонтакте":
+        vk_link = "https://vk.com/id1028743915"
+        bot.send_message(
+            message.chat.id,
+            f"Подписывайтесь на нас в ВКонтакте: {vk_link}",
+        )
+
     elif user_message == "Facebook":
         facebook_link = "https://www.facebook.com/share/1D8bg2xL1i/?mibextid=wwXIfr"
         bot.send_message(
@@ -2834,51 +2804,15 @@ def handle_message(message):
 
 # Run the bot
 if __name__ == "__main__":
-    # Создаем таблицы в базе данных
     create_tables()
-
-    # Настройка обхода блокировок
-    telebot.apihelper.RETRY_ON_ERROR = True
     set_bot_commands()
+    get_currency_rates()
+    get_rub_to_krw_rate()
+    get_usdt_to_krw_rate()
 
-    def delete_webhook():
-        try:
-            # Метод 1: через API напрямую с IP
-            requests.get(
-                f"https://api.telegram.org/bot{bot_token}/deleteWebhook?drop_pending_updates=true",
-                timeout=10,
-            )
-            time.sleep(2)
+    # Обновляем курс каждые 12 часов
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(get_usdt_to_krw_rate, "interval", hours=12)
+    scheduler.start()
 
-            # Метод 2: через библиотеку
-            bot.remove_webhook()
-            time.sleep(2)
-
-            # Метод 3: устанавливаем пустой webhook
-            bot.set_webhook(url="")
-            time.sleep(2)
-
-            set_bot_commands()
-
-            print("Webhook удален всеми методами")
-        except Exception as e:
-            print(f"Ошибка при удалении webhook: {e}")
-
-    # Первоначальное удаление webhook
-    delete_webhook()
-
-    # Запускаем периодическое удаление webhook каждые 10 минут
-    def webhook_deletion_scheduler():
-        while True:
-            time.sleep(10)  # 100 секунд
-            print("Выполняется плановое удаление webhook...")
-            delete_webhook()
-            set_bot_commands()
-
-    # Запускаем планировщик в отдельном потоке
-    webhook_thread = threading.Thread(target=webhook_deletion_scheduler)
-    webhook_thread.daemon = True  # Поток завершится вместе с основной программой
-    webhook_thread.start()
-
-    # Запускаем бота
-    bot.polling(none_stop=True, interval=1, timeout=30)
+    bot.polling(non_stop=True)
