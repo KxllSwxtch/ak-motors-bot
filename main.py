@@ -8,7 +8,11 @@ import logging
 import urllib.parse
 import time
 import threading
+import urllib3
 from datetime import datetime
+
+# Suppress SSL warnings for requests with verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from database import (
@@ -1153,10 +1157,27 @@ def get_currency_rates():
     # Получаем курс USD → RUB
     get_usd_to_rub_rate()
 
-    rates_text = (
-        f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
-        f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
-    )
+    # Check if rates are available before formatting
+    if usd_to_krw_rate is not None and usd_to_rub_rate is not None:
+        rates_text = (
+            f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
+            f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
+        )
+    elif usd_to_krw_rate is not None and usd_to_rub_rate is None:
+        rates_text = (
+            f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
+            f"USD → RUB: <b>Недоступно</b>"
+        )
+    elif usd_to_krw_rate is None and usd_to_rub_rate is not None:
+        rates_text = (
+            f"USD → KRW: <b>Недоступно</b>\n"
+            f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
+        )
+    else:
+        rates_text = (
+            f"USD → KRW: <b>Недоступно</b>\n"
+            f"USD → RUB: <b>Недоступно</b>"
+        )
 
     return rates_text
 
@@ -1191,7 +1212,8 @@ def get_usd_to_rub_rate():
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        # Disable SSL verification due to expired certificate
+        response = requests.get(url, headers=headers, verify=False)
         response.raise_for_status()  # Проверяем успешность запроса
         data = response.json()
 
