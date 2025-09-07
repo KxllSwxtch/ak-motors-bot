@@ -1977,7 +1977,7 @@ def calculate_cost(link, message):
 
         # Конвертируем стоимость авто в рубли
         price_krw = int(car_price) * 10000
-        price_usd = price_krw / usd_to_krw_rate
+        price_usd = price_krw / usdt_to_krw_rate
         price_rub = price_usd * usd_to_rub_rate
 
         response = get_customs_fees(
@@ -2765,7 +2765,7 @@ def process_car_price(message):
     car_price_krw = user_data[message.chat.id]["car_price_krw"]
 
     # Конвертируем стоимость автомобиля в USD и RUB
-    price_usd = car_price_krw / usd_to_krw_rate
+    price_usd = car_price_krw / usdt_to_krw_rate
     price_rub = price_usd * usd_to_rub_rate
 
     # Рассчитываем таможенные платежи
