@@ -732,7 +732,7 @@ def handle_usdt_rate_input(message):
         bot.send_message(
             user_id,
             f"✅ <b>Курс USDT успешно обновлен!</b>\n\n"
-            f"💱 Новый курс: ₩{format_number(new_rate)}\n"
+            f"💱 Новый курс: ₩{new_rate:,.2f}\n"
             f"👤 Установлен: {message.from_user.first_name} (@{message.from_user.username})",
             parse_mode="HTML",
         )
@@ -744,7 +744,7 @@ def handle_usdt_rate_input(message):
                     bot.send_message(
                         manager_id,
                         f"📢 <b>Обновление курса USDT</b>\n\n"
-                        f"💱 Новый курс: ₩{format_number(new_rate)}\n"
+                        f"💱 Новый курс: ₩{new_rate:,.2f}\n"
                         f"👤 Установил: {message.from_user.first_name} (@{message.from_user.username})",
                         parse_mode="HTML",
                     )
@@ -800,7 +800,7 @@ def handle_usd_rub_rate_input(message):
         bot.send_message(
             user_id,
             f"✅ <b>Курс USD/RUB успешно обновлен!</b>\n\n"
-            f"💱 Новый курс: {format_number(new_rate)} ₽\n"
+            f"💱 Новый курс: {new_rate:,.2f} ₽\n"
             f"👤 Установлен: {message.from_user.first_name} (@{message.from_user.username})",
             parse_mode="HTML",
         )
@@ -812,7 +812,7 @@ def handle_usd_rub_rate_input(message):
                     bot.send_message(
                         manager_id,
                         f"📢 <b>Обновление курса USD/RUB</b>\n\n"
-                        f"💱 Новый курс: {format_number(new_rate)} ₽\n"
+                        f"💱 Новый курс: {new_rate:,.2f} ₽\n"
                         f"👤 Установил: {message.from_user.first_name} (@{message.from_user.username})",
                         parse_mode="HTML",
                     )
@@ -1293,30 +1293,30 @@ def get_currency_rates():
 
     # Проверяем источник USDT курса для отображения
     db_usdt_rate = get_usdt_krw_rate_from_db()
-    usdt_source = " (Manual)" if db_usdt_rate else " (API)"
+    # usdt_source = " (Manual)" if db_usdt_rate else " (API)"
 
     # Проверяем источник USD/RUB курса для отображения  
     db_usd_rub_rate = get_usd_rub_rate_from_db()
-    usd_rub_source = " (Manual)" if db_usd_rub_rate else " (API)"
+    # usd_rub_source = " (Manual)" if db_usd_rub_rate else " (API)"
 
     # Форматируем отображение курсов
     rates_text = "💱 <b>Текущие курсы валют:</b>\n\n"
     
     # USD → KRW
-    if usd_to_krw_rate is not None:
-        rates_text += f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
-    else:
-        rates_text += f"USD → KRW: <b>Недоступно</b>\n"
+    # if usd_to_krw_rate is not None:
+    #     rates_text += f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
+    # else:
+    #     rates_text += f"USD → KRW: <b>Недоступно</b>\n"
     
     # USD → RUB 
     if usd_to_rub_rate is not None:
-        rates_text += f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>{usd_rub_source}\n"
+        rates_text += f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>\n"
     else:
         rates_text += f"USD → RUB: <b>Недоступно</b>\n"
     
     # USDT → KRW
     if usdt_to_krw_rate is not None:
-        rates_text += f"USDT → KRW: <b>{usdt_to_krw_rate:.2f} ₩</b>{usdt_source}"
+        rates_text += f"USDT → KRW: <b>{usdt_to_krw_rate:.2f} ₩</b>"
     else:
         rates_text += f"USDT → KRW: <b>Недоступно</b>"
 
