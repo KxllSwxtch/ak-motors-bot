@@ -198,6 +198,10 @@ def set_usdt_rate_command(message):
         # Получаем текущий курс из базы данных
         db_rate = get_usdt_krw_rate_from_db()
 
+        # Если нет курса в БД и глобальная переменная равна 0, получаем курс из API
+        if not db_rate and usdt_to_krw_rate == 0:
+            get_usdt_to_krw_rate()
+
         # Получаем текущий курс (либо из БД, либо последний из API)
         current_rate = db_rate["rate_value"] if db_rate else usdt_to_krw_rate
 
@@ -241,6 +245,10 @@ def set_usd_rub_rate_command(message):
     try:
         # Получаем текущий курс из базы данных
         db_rate = get_usd_rub_rate_from_db()
+
+        # Если нет курса в БД и глобальная переменная равна 0, получаем курс из API
+        if not db_rate and usd_to_rub_rate == 0:
+            get_usd_to_rub_rate()
 
         # Получаем текущий курс (либо из БД, либо последний из API)
         current_rate = db_rate["rate_value"] if db_rate else usd_to_rub_rate
