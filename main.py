@@ -1997,26 +1997,26 @@ def calculate_cost(link, message):
         # Под ключ до Владивостока
         total_cost_vladivostok = (
             price_rub
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((1400000 / usdt_to_krw_rate) * usd_to_rub_rate)
+            + ((1400000 / usdt_to_krw_rate) * usd_to_rub_rate)
+            + ((440000 / usdt_to_krw_rate) * usd_to_rub_rate)
         )
 
         total_cost_krw_vladivostok = price_krw + 1400000 + 1400000 + 440000
 
         total_cost_usd_vladivostok = (
             price_usd
-            + (1400000 / usd_to_krw_rate)
-            + (1400000 / usd_to_krw_rate)
-            + (440000 / usd_to_krw_rate)
+            + (1400000 / usdt_to_krw_rate)
+            + (1400000 / usdt_to_krw_rate)
+            + (440000 / usdt_to_krw_rate)
         )
 
         # Полный расчёт до МСК
         total_cost = (
             price_rub
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((1400000 / usd_to_krw_rate) * usd_to_rub_rate)
-            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((1400000 / usdt_to_krw_rate) * usd_to_rub_rate)
+            + ((1400000 / usdt_to_krw_rate) * usd_to_rub_rate)
+            + ((440000 / usdt_to_krw_rate) * usd_to_rub_rate)
             + 120000
             + customs_fee
             + customs_duty
@@ -2040,9 +2040,9 @@ def calculate_cost(link, message):
 
         total_cost_usd = (
             price_usd
-            + (1400000 / usd_to_krw_rate)
-            + (1400000 / usd_to_krw_rate)
-            + (440000 / usd_to_krw_rate)
+            + (1400000 / usdt_to_krw_rate)
+            + (1400000 / usdt_to_krw_rate)
+            + (440000 / usdt_to_krw_rate)
             + (120000 / usd_to_rub_rate)
             + (customs_fee / usd_to_rub_rate)
             + (customs_duty / usd_to_rub_rate)
@@ -2055,9 +2055,9 @@ def calculate_cost(link, message):
         car_data["total_cost_krw"] = total_cost_krw
         car_data["total_cost_rub"] = total_cost
 
-        car_data["company_fees_usd"] = 1400000 / usd_to_krw_rate
+        car_data["company_fees_usd"] = 1400000 / usdt_to_krw_rate
         car_data["company_fees_krw"] = 1400000
-        car_data["company_fees_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["company_fees_rub"] = (1400000 / usdt_to_krw_rate) * usd_to_rub_rate
 
         car_data["agent_korea_rub"] = 50000
         car_data["agent_korea_usd"] = 50000 / usd_to_rub_rate
@@ -2071,9 +2071,9 @@ def calculate_cost(link, message):
         car_data["car_price_usd"] = price_usd
         car_data["car_price_rub"] = price_rub
 
-        car_data["dealer_korea_usd"] = 440000 / usd_to_krw_rate
+        car_data["dealer_korea_usd"] = 440000 / usdt_to_krw_rate
         car_data["dealer_korea_krw"] = 440000
-        car_data["dealer_korea_rub"] = (440000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["dealer_korea_rub"] = (440000 / usdt_to_krw_rate) * usd_to_rub_rate
 
         car_data["delivery_korea_usd"] = 100000 / usd_to_krw_rate
         car_data["delivery_korea_krw"] = 100000
@@ -2083,13 +2083,13 @@ def calculate_cost(link, message):
         car_data["transfer_korea_krw"] = 350000
         car_data["transfer_korea_rub"] = (350000 / usd_to_krw_rate) * usd_to_rub_rate
 
-        car_data["freight_korea_usd"] = 1400000 / usd_to_krw_rate
+        car_data["freight_korea_usd"] = 1400000 / usdt_to_krw_rate
         car_data["freight_korea_krw"] = 1400000
-        car_data["freight_korea_rub"] = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+        car_data["freight_korea_rub"] = (1400000 / usdt_to_krw_rate) * usd_to_rub_rate
 
         car_data["korea_total_usd"] = (
             (50000 / usd_to_rub_rate)
-            + (440000 / usd_to_krw_rate)
+            + (440000 / usdt_to_krw_rate)
             + (100000 / usd_to_krw_rate)
             + (350000 / usd_to_krw_rate)
             + (600)
@@ -2105,7 +2105,7 @@ def calculate_cost(link, message):
 
         car_data["korea_total_rub"] = (
             (50000)
-            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((440000 / usdt_to_krw_rate) * usd_to_rub_rate)
             + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
             + (600 * usd_to_rub_rate)
@@ -2114,7 +2114,7 @@ def calculate_cost(link, message):
         car_data["korea_total_plus_car_usd"] = (
             (50000 / usd_to_rub_rate)
             + (price_usd)
-            + (440000 / usd_to_krw_rate)
+            + (440000 / usdt_to_krw_rate)
             + (100000 / usd_to_krw_rate)
             + (350000 / usd_to_krw_rate)
             + (600)
@@ -2130,7 +2130,7 @@ def calculate_cost(link, message):
         car_data["korea_total_plus_car_rub"] = (
             (50000)
             + (price_rub)
-            + ((440000 / usd_to_krw_rate) * usd_to_rub_rate)
+            + ((440000 / usdt_to_krw_rate) * usd_to_rub_rate)
             + ((100000 / usd_to_krw_rate) * usd_to_rub_rate)
             + ((350000 / usd_to_krw_rate) * usd_to_rub_rate)
             + (600 * usd_to_rub_rate)
@@ -2164,7 +2164,7 @@ def calculate_cost(link, message):
         car_data["vladivostok_transfer_usd"] = 13000 / usd_to_rub_rate
         car_data["vladivostok_transfer_krw"] = (
             13000 / usd_to_rub_rate
-        ) * usdt_to_krw_rate
+        ) * usd_to_krw_rate
         car_data["vladivostok_transfer_rub"] = 13000
 
         car_data["svh_russia_usd"] = 50000 / usd_to_rub_rate
@@ -2817,15 +2817,15 @@ def process_car_price(message):
 
     company_fees_krw = 1400000
     company_fees_usd = 1400000 / usdt_to_krw_rate
-    company_fees_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+    company_fees_rub = (1400000 / usdt_to_krw_rate) * usd_to_rub_rate
 
     freight_korea_krw = 1400000
-    freight_korea_usd = 1400000 / usd_to_krw_rate
-    freight_korea_rub = (1400000 / usd_to_krw_rate) * usd_to_rub_rate
+    freight_korea_usd = 1400000 / usdt_to_krw_rate
+    freight_korea_rub = (1400000 / usdt_to_krw_rate) * usd_to_rub_rate
 
     dealer_korea_krw = 440000
-    dealer_korea_usd = 440000 / usd_to_krw_rate
-    dealer_korea_rub = (440000 / usd_to_krw_rate) * usd_to_rub_rate
+    dealer_korea_usd = 440000 / usdt_to_krw_rate
+    dealer_korea_rub = (440000 / usdt_to_krw_rate) * usd_to_rub_rate
 
     broker_russia_rub = 120000
     broker_russia_usd = 120000 / usd_to_rub_rate
@@ -2845,7 +2845,7 @@ def process_car_price(message):
 
     vladivostok_transfer_rub = 13000
     vladivostok_transfer_usd = 13000 / usd_to_rub_rate
-    vladivostok_transfer_krw = (13000 / usd_to_rub_rate) * usdt_to_krw_rate
+    vladivostok_transfer_krw = (13000 / usd_to_rub_rate) * usd_to_krw_rate
 
     moscow_transporter_rub = 230000
     moscow_transporter_usd = 230000 / usd_to_rub_rate
