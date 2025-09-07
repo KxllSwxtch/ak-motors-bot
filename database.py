@@ -365,3 +365,34 @@ def get_usdt_krw_rate_from_db():
             )
             result = cur.fetchone()
             return result if result else None
+
+
+def set_usd_rub_rate(rate_value, updated_by):
+    """Устанавливает курс USD к RUB в базе данных."""
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO exchange_rates (rate_type, rate_value, updated_by)
+                VALUES ('USD_RUB', %s, %s);
+                """,
+                (rate_value, updated_by),
+            )
+            conn.commit()
+
+
+def get_usd_rub_rate_from_db():
+    """Получает последний установленный курс USD к RUB из базы данных."""
+    with connect_db() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT rate_value, updated_at, updated_by
+                FROM exchange_rates
+                WHERE rate_type = 'USD_RUB'
+                ORDER BY updated_at DESC
+                LIMIT 1;
+                """
+            )
+            result = cur.fetchone()
+            return result if result else None
