@@ -1278,7 +1278,7 @@ def get_rub_to_krw_rate():
 
 
 def get_currency_rates():
-    global usd_rate, usd_to_krw_rate, usd_to_rub_rate
+    global usd_rate, usd_to_krw_rate, usd_to_rub_rate, usdt_to_krw_rate
 
     print_message("ПОЛУЧАЕМ КУРСЫ ВАЛЮТ")
 
@@ -1288,27 +1288,37 @@ def get_currency_rates():
     # Получаем курс USD → RUB
     get_usd_to_rub_rate()
 
-    # Check if rates are available before formatting
-    if usd_to_krw_rate is not None and usd_to_rub_rate is not None:
-        rates_text = (
-            f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
-            f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
-        )
-    elif usd_to_krw_rate is not None and usd_to_rub_rate is None:
-        rates_text = (
-            f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
-            f"USD → RUB: <b>Недоступно</b>"
-        )
-    elif usd_to_krw_rate is None and usd_to_rub_rate is not None:
-        rates_text = (
-            f"USD → KRW: <b>Недоступно</b>\n"
-            f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>"
-        )
+    # Получаем курс USDT → KRW
+    get_usdt_to_krw_rate()
+
+    # Проверяем источник USDT курса для отображения
+    db_usdt_rate = get_usdt_krw_rate_from_db()
+    usdt_source = " (Manual)" if db_usdt_rate else " (API)"
+
+    # Проверяем источник USD/RUB курса для отображения  
+    db_usd_rub_rate = get_usd_rub_rate_from_db()
+    usd_rub_source = " (Manual)" if db_usd_rub_rate else " (API)"
+
+    # Форматируем отображение курсов
+    rates_text = "💱 <b>Текущие курсы валют:</b>\n\n"
+    
+    # USD → KRW
+    if usd_to_krw_rate is not None:
+        rates_text += f"USD → KRW: <b>{usd_to_krw_rate:.2f} ₩</b>\n"
     else:
-        rates_text = (
-            f"USD → KRW: <b>Недоступно</b>\n"
-            f"USD → RUB: <b>Недоступно</b>"
-        )
+        rates_text += f"USD → KRW: <b>Недоступно</b>\n"
+    
+    # USD → RUB 
+    if usd_to_rub_rate is not None:
+        rates_text += f"USD → RUB: <b>{usd_to_rub_rate:.2f} ₽</b>{usd_rub_source}\n"
+    else:
+        rates_text += f"USD → RUB: <b>Недоступно</b>\n"
+    
+    # USDT → KRW
+    if usdt_to_krw_rate is not None:
+        rates_text += f"USDT → KRW: <b>{usdt_to_krw_rate:.2f} ₩</b>{usdt_source}"
+    else:
+        rates_text += f"USDT → KRW: <b>Недоступно</b>"
 
     return rates_text
 
